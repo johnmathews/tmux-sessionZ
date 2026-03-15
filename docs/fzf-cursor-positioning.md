@@ -4,7 +4,9 @@ How to reliably set the cursor position when using fzf's `reload-sync` to
 replace the input list at startup. Documented while implementing the "open
 sessionx with current window pre-selected" feature.
 
-Environment: fzf 0.67.0, tmux 3.6a, bash 5.3.9, macOS.
+Environment: fzf 0.67.0 (Homebrew), tmux 3.6a, bash 5.3.9 (Homebrew;
+system bash is 3.2.57), zsh 5.9, macOS (Darwin 25.3.0).
+tmux-sessionx: commit 301ce31 (no tagged releases).
 
 ## The problem
 
@@ -17,17 +19,16 @@ Naively chaining `start:reload-sync(CMD)+pos(N)` does not work.
 ## fzf event lifecycle
 
 fzf's `start` event fires before input is available. From the
-[fzf 0.53.0 changelog](https://github.com/junegunn/fzf/blob/master/CHANGELOG.md)
-(search "0.53.0"):
+[fzf 0.36.0 changelog](https://github.com/junegunn/fzf/blob/master/CHANGELOG.md)
+(search "0.36.0") and the fzf man page:
 
-> "Since fzf consumes the input asynchronously, the input list is not
-> available in most cases."
+> "Since fzf consumes the input stream asynchronously, the input list is
+> not available unless you use `--sync`."
 
 Empirical event ordering (tested via `execute-silent(echo EVENT >> log)`):
 
 ```
 start            ← fires first, before any input is read
-start-done       ← after reload-sync completes
 load             ← after the input stream is fully processed
 result           ← after filtering; fires multiple times
 result
@@ -38,6 +39,10 @@ result
 Source: tested by binding `execute-silent(echo EVENT >> FILE)` to `start`,
 `load`, and `result`, with `reload-sync` in `start`. Verified on fzf 0.67.0.
 
+Note: there is no `start-done` event in fzf. The `start` event fires once
+at startup; `load` fires when the input stream (including any
+`start:reload-sync` replacement) is fully processed.
+
 ## What doesn't work and why
 
 ### `start:reload-sync(CMD)+pos(N)` — fails
@@ -45,7 +50,7 @@ Source: tested by binding `execute-silent(echo EVENT >> FILE)` to `start`,
 `pos()` runs immediately after `reload-sync` returns, but fzf hasn't indexed
 the new result list yet. The cursor silently stays at position 0.
 
-Reference: fzf 0.53.0 changelog, `start` event description.
+Reference: fzf 0.36.0 changelog, `start` event description.
 
 ### `start:reload-sync(CMD)` + `result:pos(N)+unbind(result)` — fails
 
@@ -66,20 +71,27 @@ list length.
 Attempted to suppress the premature `result` by unbinding it before
 `reload-sync` and rebinding after. Still produced wrong positions. The
 `rebind` may re-fire a queued result from the initial input, or internal fzf
-event dispatching doesn't guarantee the ordering we need.
+event dispatching doesn't guarantee the ordering we need. (`unbind` was
+introduced in fzf 0.27.1, `rebind` in 0.30.0.)
 
 ## What works
 
 ### `start:reload-sync(CMD)` + `load:pos(N)` — reliable
 
 The `load` event fires "when the input stream is complete and the initial
-processing of the list is done"
-([fzf 0.49.0 changelog](https://github.com/junegunn/fzf/blob/master/CHANGELOG.md),
-search "0.49.0"). When `start:reload-sync` replaces the input, `load` fires
+processing of the list is complete"
+([fzf 0.36.0 changelog](https://github.com/junegunn/fzf/blob/master/CHANGELOG.md),
+search "0.36.0"). When `start:reload-sync` replaces the input, `load` fires
 after the reloaded data is fully processed — confirmed by the event ordering
-test above (`load` appears after `start-done`).
+test above (`load` appears after `start`).
 
-`load` fires exactly once, so no `unbind` is needed.
+Caveat: `load` fires after *every* input stream completion, not just once.
+User-triggered `reload-sync` bindings (ctrl-r, ctrl-t, etc.) will re-fire
+`load`, re-applying `pos($POS)` with the stale startup value. In practice
+this is harmless if those bindings also set cursor position via `transform`
+(which runs after `reload-sync` but before `load` re-fires), though the
+`load` handler may briefly flicker the cursor. If this becomes a problem,
+`unbind(load)` can be chained after the initial `load:pos(N)` fires.
 
 ```bash
 args+=(--bind "start:reload-sync($RECENT_CMD)")
@@ -129,7 +141,7 @@ pos(3) → position=2 → line3-CCC
 pos(5) → position=4 → line1-AAA  (first original, last after tac)
 ```
 
-## Current solution (90% reliable)
+## Current solution
 
 ```bash
 RECENT_CMD='tmux list-sessions -F "#{session_activity} #{session_name}" \
@@ -148,20 +160,45 @@ if [[ -n "$LINE_NUM" ]]; then
 fi
 ```
 
-The remaining ~10% failure rate is likely a timing edge case where `load`
-fires before the reloaded result list is fully indexed, similar to the `start`
-event issue but less frequent. A possible mitigation would be to also bind
-`result:pos(N)+unbind(result)` as a fallback, accepting that it may
-occasionally position on the pre-reload list.
+The position is pre-computed at script time (before fzf launches) to avoid
+races between the reload command and position calculation.
+
+### Known issue: piped-input race condition
+
+The sessionx plugin pipes an **alphabetical** window list into fzf via stdin.
+The wrapper's `start:reload-sync` replaces it with a **chronological** list.
+`POS` is pre-computed for the chronological order.
+
+`load` can fire for the piped (alphabetical) input before `reload-sync`
+replaces it. When that happens, `pos(POS)` applies to the wrong list — e.g.,
+`pos(24)` selects `dev-lyrics:1` instead of `server:2`. The two lists
+contain identical items but in different orders:
+- Alphabetical (sessionx `input()`): `tmux list-windows -a -F ...`
+- Chronological (wrapper `RECENT_CMD`): sessions sorted by `session_activity`,
+  windows listed per session
+
+Approaches tried and failed:
+- `start:unbind(load)+reload-sync(CMD)+rebind(load)` + `load:pos(N)+unbind(load)`
+  — still unreliable (~70% success); fzf event dispatching doesn't guarantee
+  the ordering needed
+- `load:reload-sync(CMD)+transform(echo pos(N))+unbind(load)` — cursor always
+  lands on last item; `transform` output doesn't defer long enough for fzf to
+  index the reloaded list
+
+The `--listen` HTTP API (post-start `curl`) remains the only confirmed 100%
+reliable method for startup positioning, but adds complexity (port selection,
+background process, cleanup).
 
 ## References
 
 - fzf CHANGELOG.md: https://github.com/junegunn/fzf/blob/master/CHANGELOG.md
-  - `start` event (0.53.0): "the input list is not available in most cases"
-  - `load` event (0.49.0): fires when input stream is complete
-  - `result` event (0.49.0): fires when filtering is complete
+  - `start` event (0.36.0): "the input list is not available unless you use `--sync`"
+  - `load` event (0.36.0): fires when input stream is complete
+  - `result` event (0.46.0): fires when filtering is complete
   - `pos()` action (0.36.0): move cursor to numeric position
   - `reload-sync` (0.36.0): synchronous input replacement
+  - `transform` (0.45.0): conditionally perform actions based on script output
+  - `unbind` (0.27.1) / `rebind` (0.30.0): dynamic binding management
   - `--track` with `--tac` warning (0.39.0): "not recommended"
 - fzf man page (`man fzf`):
   - AVAILABLE ACTIONS: `pos(...)`, `first` (= `pos(1)`), `last` (= `pos(-1)`)
