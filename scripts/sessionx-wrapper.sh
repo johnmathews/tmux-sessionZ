@@ -115,10 +115,14 @@ args+=(--bind "ctrl-x:execute-silent($KILL_WIN_EXEC)+reload-sync($LIST_CMD)+tran
 KILL_SESSION_EXEC='bash -c '\''session=$(echo {1} | cut -d: -f1); tmux kill-session -t "${session}";'\'''
 args+=(--bind "ctrl-q:execute-silent($KILL_SESSION_EXEC)+reload-sync($LIST_CMD)+transform($REPOS_CMD --window ${CURRENT_WINDOW})")
 
-# --- 8. Override change:first → change:last ---
+# --- 8. Override change:first — cursor to top only when query is cleared ---
 # Sessionx sets --bind 'change:first', but with --tac, 'first' = bottom of display.
-# We want the cursor at the top (most recent) when the query changes, so override with 'last'.
-args+=(--bind 'change:last')
+# Override with a conditional: emit 'last' (= top with --tac) only when the query is empty.
+# During typing, emit nothing so fzf handles cursor naturally within filtered results.
+# Using transform avoids the problem of 'change:last' firing on every keystroke during
+# deletion — intermediate keystrokes would position the cursor within shrinking filtered
+# results, and the final clear might not reposition correctly.
+args+=(--bind 'change:transform:[[ -z {q} ]] && echo last')
 
 # --- 9. ctrl-t: toggle sort (recent ↔ alphabetical) ---
 echo "recent" > "$SORT_STATE_FILE"
