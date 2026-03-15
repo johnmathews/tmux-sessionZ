@@ -115,7 +115,12 @@ args+=(--bind "ctrl-x:execute-silent($KILL_WIN_EXEC)+reload-sync($LIST_CMD)+tran
 KILL_SESSION_EXEC='bash -c '\''session=$(echo {1} | cut -d: -f1); tmux kill-session -t "${session}";'\'''
 args+=(--bind "ctrl-q:execute-silent($KILL_SESSION_EXEC)+reload-sync($LIST_CMD)+transform($REPOS_CMD --window ${CURRENT_WINDOW})")
 
-# --- 8. ctrl-t: toggle sort (recent ↔ alphabetical) ---
+# --- 8. Override change:first → change:last ---
+# Sessionx sets --bind 'change:first', but with --tac, 'first' = bottom of display.
+# We want the cursor at the top (most recent) when the query changes, so override with 'last'.
+args+=(--bind 'change:last')
+
+# --- 9. ctrl-t: toggle sort (recent ↔ alphabetical) ---
 echo "recent" > "$SORT_STATE_FILE"
 args+=(--bind "ctrl-t:transform($SCRIPT_DIR/sessionx-sort-toggle.sh $SORT_STATE_FILE $CURRENT_WINDOW)")
 
