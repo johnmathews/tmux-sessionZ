@@ -115,52 +115,71 @@ args+=(--bind "ctrl-r:execute(...)+reload-sync(CMD)+transform(SCRIPT)")
 
 Where `SCRIPT` outputs `pos(N)` after computing the correct position.
 
-### Cursor positioning after `execute()` — unreliable
+### Inline cursor positioning after state changes — unreliable
 
-When the action chain includes `execute()` (which takes over the terminal for
-user input, e.g., a rename prompt), cursor positioning via chained actions
-(`pos(N)`, `last`, `transform(pos(N))`) is unreliable. Tested approaches that
-all produce the same off-by-one (cursor at position 2 instead of 1):
+Cursor positioning via actions chained inline (`pos(N)`, `last`,
+`transform(pos(N))`) is unreliable when the list or display state has changed
+earlier in the same action chain. This affects two confirmed scenarios:
+
+**1. After `execute()` (terminal takeover):**
+
+When the chain includes `execute()` (which takes over the terminal for user
+input), cursor positioning in subsequent chained actions fails:
 
 | Chained after `execute()+reload-sync(CMD)` | Result   |
 | ------------------------------------------ | -------- |
 | `transform(repos.sh)` → outputs `pos(N)`  | position 2 |
 | `last`                                      | position 2 |
 
-This was observed for ctrl-a (new session creation) where `--boost` places the
-new session at line 1 (top of display with `--tac`). The cursor consistently
-lands on position 2 (the second item). The same `transform(pos(N))` pattern
-works correctly for operations that don't use `execute()` (e.g., ctrl-x kill
-uses `execute-silent` and positions correctly).
+Observed for ctrl-a (new session creation) where `--boost` places the new
+session at line 1 (top of display with `--tac`). Cursor consistently lands on
+position 2 (the second item).
 
 **Cause:** After `execute()` returns control to fzf, fzf redraws the terminal.
 This redraw resets or overrides cursor position set by subsequent actions in
-the chain. Actions chained after `execute()` run before the redraw completes,
-so their cursor positioning is lost. Confirmed by the HTTP API fix working
-(HTTP-delivered actions are processed after the redraw).
+the chain. Confirmed by the HTTP API fix working (HTTP-delivered actions are
+processed after the redraw).
 
 **Why other `execute()` operations appear unaffected:** ctrl-r (rename session)
-and ctrl-y (rename window) also use `execute()` but don't exhibit the off-by-one.
-This is because renaming doesn't change the list order — the renamed item stays
-at the same position. Even if fzf's redraw resets the cursor to its pre-execute
-position, that position happens to be correct (the cursor was already on the
-item being renamed). For ctrl-a, the list changes (new item at top via
-`--boost`), so the pre-execute cursor position no longer corresponds to the
-target.
+and ctrl-y (rename window) also use `execute()` but don't exhibit the off-by-one
+because renaming doesn't change list order — even if fzf resets the cursor to
+its pre-execute position, that position is still correct.
 
-**Fix:** Use the `--listen` HTTP API to send the cursor action after fzf has
-fully settled, the same approach used for initial cursor positioning:
+**2. After `change` event (query text changes):**
+
+Sessionx sets `change:first`, but with `--tac`, `first` = bottom of display.
+Overriding with `change:last` or `change:transform(echo last)` does not
+reliably position the cursor at the top — after clearing a filter query, the
+cursor lands in the middle of the list instead:
+
+| `change` binding                              | Result             |
+| --------------------------------------------- | ------------------ |
+| `change:last`                                  | middle of list     |
+| `change:transform(echo last)`                  | middle of list     |
+| `change:transform` → HTTP API `last`           | top of list ✓      |
+
+**Cause:** Same rendering override. When the query changes, fzf re-filters and
+redraws. Inline `last` runs before the redraw completes and is overridden.
+
+**Fix for both:** Use the `--listen` HTTP API to send cursor actions after fzf
+has fully settled. A background `curl` with a 100ms delay ensures the action
+is processed after all rendering:
 
 ```bash
+# ctrl-a: new session — send 'last' via HTTP after execute()+reload-sync
 args+=(--bind "ctrl-a:execute(PROMPT)+reload-sync(LIST --boost NAME)\
 +execute-silent(bash -c 'sleep 0.1; curl -s -X POST \
 http://localhost:PORT -d last' &)")
+
+# change: cursor to top when query is cleared — conditional HTTP via transform
+args+=(--bind "change:transform([[ -z {q} ]] && echo \
+\"execute-silent(bash -c 'sleep 0.1; curl -s -X POST \
+http://localhost:PORT -d last' &)\")")
 ```
 
-The `execute-silent` backgrounds a process that waits 100ms (for fzf to finish
-redrawing after `execute()` and `reload-sync`), then sends `last` via the HTTP
-API. fzf processes the HTTP-delivered action after all rendering is complete,
-reliably moving the cursor to the top of the display.
+The `execute-silent` backgrounds a process that waits 100ms, then sends `last`
+via the HTTP API. fzf processes the HTTP-delivered action after all rendering
+is complete, reliably moving the cursor to the top of the display.
 
 ### `pos(N)` via `--listen` HTTP API — reliable (adopted solution)
 
