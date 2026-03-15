@@ -76,7 +76,7 @@ introduced in fzf 0.27.1, `rebind` in 0.30.0.)
 
 ## What works
 
-### `start:reload-sync(CMD)` + `load:pos(N)` — reliable
+### `start:reload-sync(CMD)` + `load:pos(N)` — ~80% reliable
 
 The `load` event fires "when the input stream is complete and the initial
 processing of the list is complete"
@@ -85,20 +85,22 @@ search "0.36.0"). When `start:reload-sync` replaces the input, `load` fires
 after the reloaded data is fully processed — confirmed by the event ordering
 test above (`load` appears after `start`).
 
-Caveat: `load` fires after *every* input stream completion, not just once.
-User-triggered `reload-sync` bindings (ctrl-r, ctrl-t, etc.) will re-fire
-`load`, re-applying `pos($POS)` with the stale startup value. In practice
-this is harmless if those bindings also set cursor position via `transform`
-(which runs after `reload-sync` but before `load` re-fires), though the
-`load` handler may briefly flicker the cursor. If this becomes a problem,
-`unbind(load)` can be chained after the initial `load:pos(N)` fires.
+**However**, when fzf receives piped input AND `start:reload-sync` replaces it,
+`load` can fire for the piped input before reload-sync replaces it. This makes
+`load:pos(N)` unreliable (~80% success) when the piped input has a different
+order than the reloaded input — `pos(N)` applies to the wrong list. See
+"Why `load:pos(N)` was unreliable" below for details.
+
+Additional caveat: `load` fires after *every* input stream completion, not just
+once. User-triggered `reload-sync` bindings (ctrl-r, ctrl-t, etc.) will
+re-fire `load`, re-applying `pos($POS)` with the stale startup value.
 
 ```bash
 args+=(--bind "start:reload-sync($RECENT_CMD)")
 args+=(--bind "load:pos($POS)")
 ```
 
-### User-triggered `reload-sync` + `transform` — reliable
+### User-triggered `reload-sync` + `transform` — mostly reliable
 
 For bindings triggered by user interaction (ctrl-r, ctrl-t, etc.), fzf is
 fully initialized. `reload-sync(CMD)+transform(SCRIPT)` works because:
@@ -113,11 +115,80 @@ args+=(--bind "ctrl-r:execute(...)+reload-sync(CMD)+transform(SCRIPT)")
 
 Where `SCRIPT` outputs `pos(N)` after computing the correct position.
 
-### `pos(N)` via `--listen` HTTP API — reliable
+### Cursor positioning after `execute()` — unreliable
+
+When the action chain includes `execute()` (which takes over the terminal for
+user input, e.g., a rename prompt), cursor positioning via chained actions
+(`pos(N)`, `last`, `transform(pos(N))`) is unreliable. Tested approaches that
+all produce the same off-by-one (cursor at position 2 instead of 1):
+
+| Chained after `execute()+reload-sync(CMD)` | Result   |
+| ------------------------------------------ | -------- |
+| `transform(repos.sh)` → outputs `pos(N)`  | position 2 |
+| `last`                                      | position 2 |
+
+This was observed for ctrl-a (new session creation) where `--boost` places the
+new session at line 1 (top of display with `--tac`). The cursor consistently
+lands on position 2 (the second item). The same `transform(pos(N))` pattern
+works correctly for operations that don't use `execute()` (e.g., ctrl-x kill
+uses `execute-silent` and positions correctly).
+
+**Cause:** After `execute()` returns control to fzf, fzf redraws the terminal.
+This redraw resets or overrides cursor position set by subsequent actions in
+the chain. Actions chained after `execute()` run before the redraw completes,
+so their cursor positioning is lost. Confirmed by the HTTP API fix working
+(HTTP-delivered actions are processed after the redraw).
+
+**Why other `execute()` operations appear unaffected:** ctrl-r (rename session)
+and ctrl-y (rename window) also use `execute()` but don't exhibit the off-by-one.
+This is because renaming doesn't change the list order — the renamed item stays
+at the same position. Even if fzf's redraw resets the cursor to its pre-execute
+position, that position happens to be correct (the cursor was already on the
+item being renamed). For ctrl-a, the list changes (new item at top via
+`--boost`), so the pre-execute cursor position no longer corresponds to the
+target.
+
+**Fix:** Use the `--listen` HTTP API to send the cursor action after fzf has
+fully settled, the same approach used for initial cursor positioning:
+
+```bash
+args+=(--bind "ctrl-a:execute(PROMPT)+reload-sync(LIST --boost NAME)\
++execute-silent(bash -c 'sleep 0.1; curl -s -X POST \
+http://localhost:PORT -d last' &)")
+```
+
+The `execute-silent` backgrounds a process that waits 100ms (for fzf to finish
+redrawing after `execute()` and `reload-sync`), then sends `last` via the HTTP
+API. fzf processes the HTTP-delivered action after all rendering is complete,
+reliably moving the cursor to the top of the display.
+
+### `pos(N)` via `--listen` HTTP API — reliable (adopted solution)
 
 Sending `pos(N)` via `curl -X POST localhost:PORT -d 'pos(N)'` after fzf is
-running always works. Not practical for startup positioning, but useful for
-debugging.
+running always works. This is the approach adopted for startup positioning.
+
+**Why an HTTP API for a tmux plugin?** It looks like overkill, but every
+event-based approach (`load`, `result`, `unbind`/`rebind`) fails due to the
+fundamental problem: the wrapper doesn't control fzf's piped input (sessionx
+does), so there are always two competing input streams and no way to guarantee
+event ordering between them using fzf's built-in event system alone.
+
+The HTTP API sidesteps this entirely — it's the only mechanism that guarantees
+`pos()` runs *after* `reload-sync` completes, because `reload-sync` blocks
+fzf's main event loop and HTTP-delivered actions queue behind it.
+
+**How it works internally:** fzf is written in Go. The `--listen` HTTP server
+runs in a separate goroutine. When it receives a POST with actions (e.g.,
+`pos(5)`), it sends them to the main event loop's channel. If `reload-sync` is
+currently blocking the main loop, the action sits in the channel until
+`reload-sync` finishes and the loop resumes — at which point `pos()` applies to
+the correct (reloaded) list.
+
+**Alternative that would eliminate the need:** If sessionx were patched to pipe
+the chronological list directly (or to accept a custom input command), there
+would be no competing input streams and `load:pos(N)` would work reliably. The
+HTTP approach exists because we chose not to modify plugin source files (so the
+wrapper survives plugin updates).
 
 ## pos() semantics with `--tac`
 
@@ -141,29 +212,51 @@ pos(3) → position=2 → line3-CCC
 pos(5) → position=4 → line1-AAA  (first original, last after tac)
 ```
 
-## Current solution
+## Current solution: `--listen` HTTP API
+
+The `load:pos(N)` approach was only ~80% reliable due to the piped-input race
+condition (see below). The current solution uses fzf's `--listen` HTTP API:
 
 ```bash
-RECENT_CMD='tmux list-sessions -F "#{session_activity} #{session_name}" \
-  | sort -rn | while read _ts sess; do \
-  tmux list-windows -t "$sess" \
-    -F "#{session_name}:#{window_index} #{window_name}"; done'
+FZF_LISTEN_PORT=$((RANDOM % 10000 + 40000))
+args+=(--listen "localhost:$FZF_LISTEN_PORT")
+args+=(--bind "start:reload-sync($LIST_CMD)")
 
-RECENT_LIST=$(eval "$RECENT_CMD")
-LINE_NUM=$(echo "$RECENT_LIST" | grep -n "^${CURRENT_WINDOW} " | head -1 | cut -d: -f1)
-
-args+=(--bind "start:reload-sync($RECENT_CMD)")
-if [[ -n "$LINE_NUM" ]]; then
-    TOTAL=$(echo "$RECENT_LIST" | wc -l | tr -d ' ')
-    POS=$((TOTAL - LINE_NUM + 1))
-    args+=(--bind "load:pos($POS)")
-fi
+# Background: wait for fzf, then send pos() via HTTP
+(
+    for _ in $(seq 1 100); do
+        if curl -s -o /dev/null --connect-timeout 0.1 \
+            "http://localhost:$FZF_LISTEN_PORT" 2>/dev/null; then
+            sleep 0.1
+            curl -s -X POST "http://localhost:$FZF_LISTEN_PORT" \
+                -d "pos($POS)" 2>/dev/null
+            break
+        fi
+        sleep 0.02
+    done
+) &
 ```
 
-The position is pre-computed at script time (before fzf launches) to avoid
-races between the reload command and position calculation.
+**Why this works:** `start:reload-sync` blocks fzf's main event loop. The
+HTTP-delivered `pos()` action is received by the HTTP listener goroutine and
+queued in the main event channel. When `reload-sync` completes and the main
+loop resumes, it dequeues `pos()` and applies it to the correct (reloaded)
+list. The 100ms sleep after connection provides margin for `reload-sync` to
+start blocking before we send `pos()`.
 
-### Known issue: piped-input race condition
+**Limitation:** Incompatible with sessionx's git-branch mode, which also uses
+`--listen`. fzf only supports one `--listen` port; the last `--listen` arg
+wins. If git-branch mode is enabled, its port overrides ours and the background
+curl fails silently (cursor lands at default position).
+
+### Previous solution: `load:pos(N)` (~80% reliable)
+
+```bash
+args+=(--bind "start:reload-sync($RECENT_CMD)")
+args+=(--bind "load:pos($POS)")
+```
+
+### Why `load:pos(N)` was unreliable (piped-input race condition)
 
 The sessionx plugin pipes an **alphabetical** window list into fzf via stdin.
 The wrapper's `start:reload-sync` replaces it with a **chronological** list.
@@ -185,10 +278,6 @@ Approaches tried and failed:
   lands on last item; `transform` output doesn't defer long enough for fzf to
   index the reloaded list
 
-The `--listen` HTTP API (post-start `curl`) remains the only confirmed 100%
-reliable method for startup positioning, but adds complexity (port selection,
-background process, cleanup).
-
 ## References
 
 - fzf CHANGELOG.md: https://github.com/junegunn/fzf/blob/master/CHANGELOG.md
@@ -200,7 +289,9 @@ background process, cleanup).
   - `transform` (0.45.0): conditionally perform actions based on script output
   - `unbind` (0.27.1) / `rebind` (0.30.0): dynamic binding management
   - `--track` with `--tac` warning (0.39.0): "not recommended"
+  - `--listen` (0.36.0): HTTP server for sending actions to fzf programmatically
 - fzf man page (`man fzf`):
   - AVAILABLE ACTIONS: `pos(...)`, `first` (= `pos(1)`), `last` (= `pos(-1)`)
   - `--tac`: "Reverse the order of the input"
   - `reload-sync(...)`: "synchronous version of reload"
+  - `--listen`: "Start HTTP server on the given address... POST a valid action to perform it"

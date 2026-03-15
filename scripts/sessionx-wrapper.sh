@@ -8,19 +8,24 @@
 #   ctrl-r  Rename session (reloads window list, cursor follows renamed session)
 #   ctrl-y  Rename window (cursor follows renamed window)
 #   ctrl-a  New session (prompts for name)
-#   ctrl-g  New window in the selected session
+#   ctrl-g  New window in the selected session (prompts for name)
 #   ctrl-x  Kill/close window
 #   ctrl-q  Kill/close session (all its windows)
 #   ctrl-t  Toggle sort: most recently active (default) ↔ alphabetical
 #
 # Behavior changes:
 #   - Default view: reverse chronological (most recently active session first)
-#   - Opens with the current window pre-selected
+#   - Opens with the current window pre-selected (via --listen HTTP API)
+#   - All mutations reload in chronological order
 #   - Rename-session reloads the window list (not session-only list)
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DIR="/Users/john/.tmux/plugins/tmux-sessionx/scripts"
 CURRENT_WINDOW=$(tmux display-message -p '#{session_name}:#{window_index}')
 RENAME_TMPFILE="/tmp/sessionx-last-rename-$$"
+SORT_STATE_FILE="/tmp/sessionx-sort-state"
+LIST_CMD="$SCRIPT_DIR/sessionx-list-recent.sh"
+REPOS_CMD="$SCRIPT_DIR/sessionx-repos.sh"
 
 # Save original stored args
 ORIG_ARGS=$(tmux show-option -gqv @sessionx-_built-args)
@@ -31,6 +36,7 @@ cleanup() {
     tmux set-option -g @sessionx-_built-args "$ORIG_ARGS"
     tmux set-option -g @sessionx-_built-fzf-opts "$ORIG_OPTS"
     rm -f "$RENAME_TMPFILE"
+    [[ -n "$CURSOR_PID" ]] && kill "$CURSOR_PID" 2>/dev/null
 }
 trap cleanup EXIT
 
@@ -38,82 +44,80 @@ trap cleanup EXIT
 eval "$ORIG_ARGS"
 
 # --- 1. Default view: reverse chronological, cursor on current window ---
-# Generate the chronological list at script time so pos() is pre-computed (no race).
-# The reload-sync at start replaces sessionx's default alphabetical input.
-#
-# pos() does NOT work in fzf's 'start' event — the input list isn't available yet
-# (fzf 0.53 changelog: "the input list is not available in most cases"). Nor can we
-# use 'result' — it fires for the initial piped input before reload-sync replaces it.
-# The 'load' event fires once after the input stream (including reload) is fully
-# processed, making it reliable for cursor positioning.
-RECENT_CMD='tmux list-sessions -F "#{session_activity} #{session_name}" | sort -rn | while read _ts sess; do tmux list-windows -t "$sess" -F "#{session_name}:#{window_index} #{window_name}"; done'
-RECENT_LIST=$(eval "$RECENT_CMD")
+# Use --listen HTTP API for 100% reliable cursor positioning.
+# The load:pos() approach is only ~80% reliable due to a race condition where
+# load fires for the piped input before reload-sync replaces it.
+# See docs/fzf-cursor-positioning.md for details.
+RECENT_LIST=$("$LIST_CMD")
 LINE_NUM=$(echo "$RECENT_LIST" | grep -n "^${CURRENT_WINDOW} " | head -1 | cut -d: -f1)
-args+=(--bind "start:reload-sync($RECENT_CMD)")
+
+FZF_LISTEN_PORT=$((RANDOM % 10000 + 40000))
+args+=(--listen "localhost:$FZF_LISTEN_PORT")
+args+=(--bind "start:reload-sync($LIST_CMD)")
+
 if [[ -n "$LINE_NUM" ]]; then
     TOTAL=$(echo "$RECENT_LIST" | wc -l | tr -d ' ')
     POS=$((TOTAL - LINE_NUM + 1))
-    args+=(--bind "load:pos($POS)")
+    # Background: wait for fzf to start listening, then position cursor via HTTP.
+    # pos() sent via HTTP is queued behind start:reload-sync (which blocks the
+    # main event loop), so it always applies to the correct (reloaded) list.
+    (
+        for _ in $(seq 1 100); do
+            if curl -s -o /dev/null --connect-timeout 0.1 "http://localhost:$FZF_LISTEN_PORT" 2>/dev/null; then
+                sleep 0.1
+                curl -s -X POST "http://localhost:$FZF_LISTEN_PORT" -d "pos($POS)" 2>/dev/null
+                break
+            fi
+            sleep 0.02
+        done
+    ) &
+    CURSOR_PID=$!
 fi
 
-# --- 2. Override ctrl-r rename-session ---
+# --- 2. ctrl-r: rename session ---
 # execute: prompt for new name, rename, save new name to tmpfile
-# reload-sync: refresh list with window view (waits for completion)
-# transform: calculate new cursor position and emit pos() action
+# reload-sync: refresh with chronological list
+# transform: compute cursor position for renamed session
 RENAME_EXEC="bash -c 'printf >&2 \"New name: \";read name; tmux rename-session -t {1} \"\${name}\"; echo \"\${name}\" > ${RENAME_TMPFILE};'"
-RENAME_RELOAD='bash -c '\''tmux list-windows -a -F "#{session_name}:#{window_index} #{window_name}";'\'''
-RENAME_REPOS="bash -c 'name=\$(cat ${RENAME_TMPFILE} 2>/dev/null); list=\$(tmux list-windows -a -F \"#{session_name}:#{window_index} #{window_name}\"); total=\$(echo \"\$list\" | wc -l | tr -d \" \"); linenum=\$(echo \"\$list\" | grep -n \"^\${name}:\" | head -1 | cut -d: -f1); if [ -n \"\$linenum\" ]; then pos=\$((total - linenum + 1)); echo \"pos(\$pos)\"; fi;'"
-args+=(--bind "ctrl-r:execute($RENAME_EXEC)+reload-sync($RENAME_RELOAD)+transform($RENAME_REPOS)")
+args+=(--bind "ctrl-r:execute($RENAME_EXEC)+reload-sync($LIST_CMD)+transform($REPOS_CMD --session \$(cat $RENAME_TMPFILE 2>/dev/null))")
 
-# --- Helper: reposition cursor to current window after any reload ---
-REPOS_CURRENT="bash -c 'list=\$(tmux list-windows -a -F \"#{session_name}:#{window_index} #{window_name}\"); total=\$(echo \"\$list\" | wc -l | tr -d \" \"); linenum=\$(echo \"\$list\" | grep -n \"^${CURRENT_WINDOW} \" | head -1 | cut -d: -f1); if [ -n \"\$linenum\" ]; then pos=\$((total - linenum + 1)); echo \"pos(\$pos)\"; fi;'"
-
-# --- 3. Add ctrl-a to create new session, ctrl-g to create new window ---
-NEW_SESSION_EXEC="bash -c 'printf >&2 \"New session name: \"; read name; tmux new-session -d -s \"\${name}\"; echo \"\${name}\" > ${RENAME_TMPFILE};'"
-NEW_SESSION_RELOAD='bash -c '\''printf " \n"; tmux list-windows -a -F "#{session_name}:#{window_index} #{window_name}";'\'''
-NEW_SESSION_REPOS="bash -c 'name=\$(cat ${RENAME_TMPFILE} 2>/dev/null); list=\$(tmux list-windows -a -F \"#{session_name}:#{window_index} #{window_name}\"); total=\$(echo \"\$list\" | wc -l | tr -d \" \"); linenum=\$(echo \"\$list\" | grep -n \"^\${name}:\" | head -1 | cut -d: -f1); if [ -n \"\$linenum\" ]; then pos=\$((total - linenum + 1)); echo \"pos(\$pos)\"; fi;'"
-args+=(--bind "ctrl-a:execute($NEW_SESSION_EXEC)+reload-sync($NEW_SESSION_RELOAD)+transform($NEW_SESSION_REPOS)")
-
-NEW_WIN_EXEC='bash -c '\''session=$(echo {1} | cut -d: -f1); tmux new-window -t "${session}:";'\'''
-NEW_WIN_RELOAD='bash -c '\''tmux list-windows -a -F "#{session_name}:#{window_index} #{window_name}";'\'''
-args+=(--bind "ctrl-g:execute-silent($NEW_WIN_EXEC)+reload-sync($NEW_WIN_RELOAD)+transform($REPOS_CURRENT)")
-
-# --- 4. Add ctrl-x to kill window, ctrl-q to kill session ---
-KILL_WIN_EXEC='bash -c '\''session=$(echo {1} | cut -d: -f1); win=$(echo {1} | cut -d: -f2 | cut -d" " -f1); tmux kill-window -t "${session}:${win}";'\'''
-KILL_WIN_RELOAD='bash -c '\''tmux list-windows -a -F "#{session_name}:#{window_index} #{window_name}";'\'''
-args+=(--bind "ctrl-x:execute-silent($KILL_WIN_EXEC)+reload-sync($KILL_WIN_RELOAD)+transform($REPOS_CURRENT)")
-
-KILL_SESSION_EXEC='bash -c '\''session=$(echo {1} | cut -d: -f1); tmux kill-session -t "${session}";'\'''
-KILL_SESSION_RELOAD='bash -c '\''tmux list-windows -a -F "#{session_name}:#{window_index} #{window_name}";'\'''
-args+=(--bind "ctrl-q:execute-silent($KILL_SESSION_EXEC)+reload-sync($KILL_SESSION_RELOAD)+transform($REPOS_CURRENT)")
-
-# --- 5. Add ctrl-y to rename windows ---
-# Same pattern: rename, save new name, reload, reposition
+# --- 3. ctrl-y: rename window ---
 WIN_RENAME_EXEC="bash -c 'printf >&2 \"New window name: \"; read name; session=\$(echo {1} | cut -d: -f1); win=\$(echo {1} | cut -d: -f2 | cut -d\" \" -f1); tmux rename-window -t \"\${session}:\${win}\" \"\${name}\"; echo \"\${session}:\${win}\" > ${RENAME_TMPFILE};'"
-WIN_RENAME_RELOAD='bash -c '\''tmux list-windows -a -F "#{session_name}:#{window_index} #{window_name}";'\'''
-WIN_RENAME_REPOS="bash -c 'target=\$(cat ${RENAME_TMPFILE} 2>/dev/null); list=\$(tmux list-windows -a -F \"#{session_name}:#{window_index} #{window_name}\"); total=\$(echo \"\$list\" | wc -l | tr -d \" \"); linenum=\$(echo \"\$list\" | grep -n \"^\${target} \" | head -1 | cut -d: -f1); if [ -n \"\$linenum\" ]; then pos=\$((total - linenum + 1)); echo \"pos(\$pos)\"; fi;'"
-args+=(--bind "ctrl-y:execute($WIN_RENAME_EXEC)+reload-sync($WIN_RENAME_RELOAD)+transform($WIN_RENAME_REPOS)")
+args+=(--bind "ctrl-y:execute($WIN_RENAME_EXEC)+reload-sync($LIST_CMD)+transform($REPOS_CMD --window \$(cat $RENAME_TMPFILE 2>/dev/null))")
 
-# --- 6. Add ctrl-t to toggle sort order (recent ↔ alphabetical) ---
-# Default is recent (set by section 1). ctrl-t toggles to alphabetical and back.
-# Pre-compute the alphabetical pos at script time (same approach as section 1).
-SORT_STATE_FILE="/tmp/sessionx-sort-state"
-ALPHA_CMD='tmux list-windows -a -F "#{session_name}:#{window_index} #{window_name}"'
-ALPHA_LIST=$(eval "$ALPHA_CMD")
-ALPHA_LINE=$(echo "$ALPHA_LIST" | grep -n "^${CURRENT_WINDOW} " | head -1 | cut -d: -f1)
-ALPHA_TOTAL=$(echo "$ALPHA_LIST" | wc -l | tr -d ' ')
-if [[ -n "$ALPHA_LINE" ]]; then
-    ALPHA_POS=$((ALPHA_TOTAL - ALPHA_LINE + 1))
-else
-    ALPHA_POS=1
-fi
-# Re-use RECENT_LIST/POS from section 1 for the toggle back to recent
-RECENT_POS=${POS:-1}
-# Toggle: flip state, reload with the other sort, position cursor (pre-computed)
-SORT_TOGGLE="bash -c 'if [ -f ${SORT_STATE_FILE} ] && [ \"\$(cat ${SORT_STATE_FILE})\" = \"recent\" ]; then echo alpha > ${SORT_STATE_FILE}; echo \"reload-sync(${ALPHA_CMD})+change-header(Sort: A-Z)+pos(${ALPHA_POS})\"; else echo recent > ${SORT_STATE_FILE}; echo \"reload-sync(${RECENT_CMD})+change-header(Sort: recent)+pos(${RECENT_POS})\"; fi;'"
-args+=(--bind "ctrl-t:transform($SORT_TOGGLE)")
-# Initialize sort state to recent (matches the default view from section 1)
+# --- 4. ctrl-a: new session ---
+# Uses --boost to force the new session to the top of the chronological list.
+# Without this, the new session always lands at position 2 because tmux new-session -d
+# creates a detached session whose session_activity is immediately stale — the current
+# session (where fzf runs) continuously updates its activity and always wins position 1.
+#
+# Cursor positioning uses the --listen HTTP API (background curl) instead of chaining
+# pos()/last/transform in the fzf action chain. Both reload-sync+transform(pos(N)) and
+# reload-sync+last produced an off-by-one (cursor at position 2 instead of 1) when
+# preceded by execute(). The HTTP API works because fzf processes HTTP-delivered actions
+# after all rendering/redrawing is complete — same principle as initial cursor positioning.
+# See docs/fzf-cursor-positioning.md for details.
+NEW_SESSION_EXEC="bash -c 'printf >&2 \"New session name: \"; read name; tmux new-session -d -s \"\${name}\"; echo \"\${name}\" > ${RENAME_TMPFILE};'"
+args+=(--bind "ctrl-a:execute($NEW_SESSION_EXEC)+execute-silent(echo recent > $SORT_STATE_FILE)+reload-sync($LIST_CMD --boost \$(cat $RENAME_TMPFILE 2>/dev/null))+execute-silent(bash -c 'sleep 0.1; curl -s -X POST http://localhost:$FZF_LISTEN_PORT -d last' &)")
+
+# --- 5. ctrl-g: new window (prompts for name, creates in selected session) ---
+# Creates the window in the session under the cursor, prompts for a name,
+# then renames it (to override the after-new-window hook that blanks names).
+# Uses tmux new-window -P to capture the new window's session:index target.
+NEW_WIN_EXEC="bash -c 'printf >&2 \"New window name: \"; read name; session=\$(echo {1} | cut -d: -f1); target=\$(tmux new-window -t \"\${session}:\" -P -F \"#{session_name}:#{window_index}\"); tmux rename-window -t \"\${target}\" \"\${name}\"; echo \"\${target}\" > ${RENAME_TMPFILE};'"
+args+=(--bind "ctrl-g:execute($NEW_WIN_EXEC)+execute-silent(echo recent > $SORT_STATE_FILE)+reload-sync($LIST_CMD)+transform($REPOS_CMD --window \$(cat $RENAME_TMPFILE 2>/dev/null))")
+
+# --- 6. ctrl-x: kill window ---
+KILL_WIN_EXEC='bash -c '\''session=$(echo {1} | cut -d: -f1); win=$(echo {1} | cut -d: -f2 | cut -d" " -f1); tmux kill-window -t "${session}:${win}";'\'''
+args+=(--bind "ctrl-x:execute-silent($KILL_WIN_EXEC)+reload-sync($LIST_CMD)+transform($REPOS_CMD --window ${CURRENT_WINDOW})")
+
+# --- 7. ctrl-q: kill session ---
+KILL_SESSION_EXEC='bash -c '\''session=$(echo {1} | cut -d: -f1); tmux kill-session -t "${session}";'\'''
+args+=(--bind "ctrl-q:execute-silent($KILL_SESSION_EXEC)+reload-sync($LIST_CMD)+transform($REPOS_CMD --window ${CURRENT_WINDOW})")
+
+# --- 8. ctrl-t: toggle sort (recent ↔ alphabetical) ---
 echo "recent" > "$SORT_STATE_FILE"
+args+=(--bind "ctrl-t:transform($SCRIPT_DIR/sessionx-sort-toggle.sh $SORT_STATE_FILE $CURRENT_WINDOW)")
 
 # Store modified args and run sessionx
 tmux set-option -g @sessionx-_built-args "$(declare -p args)"
