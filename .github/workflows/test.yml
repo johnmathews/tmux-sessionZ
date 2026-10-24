@@ -20,7 +20,7 @@ jobs:
           tmux -V
           fzf --version
           bash --version | head -1
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.2  # no moving major tag is published
       - name: Lint tests
         run: uv run ruff check tests && uv run ruff format --check tests
       - name: Test

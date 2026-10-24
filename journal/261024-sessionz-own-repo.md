@@ -31,7 +31,7 @@ GitHub noreply address, so publishing does not expose the personal one. The jour
   stays recorded in `261024-sessionx-rewrite.md`.
 - `SESSIONX_ENTRY` became `SESSIONZ_ENTRY`. The state dir prefix became `sessionz.`.
 - New: README for plugin users, MIT licence, CI on `macos-latest` with Homebrew tmux/fzf
-  (`actions/checkout@v7`, `astral-sh/setup-uv@v10`, both the latest majors on 2026-10-24).
+  (`actions/checkout@v7`, `astral-sh/setup-uv@v10.3.2`; setup-uv publishes no moving `v10` tag, which the first CI run found).
 - Full suite: 55 passed locally (pytest exit 0), ruff and shellcheck clean.
 
 ## 4. What is deliberately not done
