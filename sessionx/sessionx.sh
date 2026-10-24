@@ -40,6 +40,8 @@ fzf --tmux center,75%,75% \
     --bind "ctrl-d:transform($act ctrl-d)" \
     --bind "right:transform($act win-next {1})" \
     --bind "left:transform($act win-prev {1})" \
+    --bind "ctrl-l:transform($act win-next {1})" \
+    --bind "ctrl-h:transform($act win-prev {1})" \
     <"$state/list" >/dev/null
 
 # run-shell reports a non-zero exit in the pane; aborting the picker is not an error.

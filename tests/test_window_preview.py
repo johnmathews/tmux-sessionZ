@@ -79,3 +79,63 @@ def test_arrows_still_move_the_cursor_in_a_name_prompt(picker: Picker) -> None:
     picker.type("X")
     picker.press("Enter")
     wait_for(lambda: "aXb" in picker.names(), what="session 'aXb'")
+
+
+def test_enter_switches_to_the_previewed_window(picker: Picker) -> None:
+    _multi(picker)
+    picker.open()
+    picker.select("multi")
+    picker.press("Right")
+    wait_for(lambda: _showing(picker, "SECOND-MARK"), what="'second'")
+    picker.press("Enter")
+    wait_for(lambda: picker.client_session() == "multi", what="switch to 'multi'")
+    wait_for(lambda: picker.client_window() == "second", what="window 'second' selected")
+
+
+def test_enter_without_arrows_keeps_the_active_window(picker: Picker) -> None:
+    _multi(picker)
+    picker.open()
+    picker.select("multi")
+    picker.press("Enter")
+    wait_for(lambda: picker.client_session() == "multi", what="switch to 'multi'")
+    assert picker.client_window() == "first"
+
+
+def test_ctrl_l_and_ctrl_h_cycle_like_the_arrows(picker: Picker) -> None:
+    _multi(picker)
+    picker.open()
+    picker.select("multi")
+    picker.press("C-l")
+    wait_for(lambda: _showing(picker, "SECOND-MARK"), what="'second' after ctrl-l")
+    picker.press("C-h")
+    wait_for(lambda: _showing(picker, "FIRST-MARK"), what="'first' after ctrl-h")
+
+
+def _split(picker: Picker, top: str, bottom: str) -> None:
+    """Session 'split' whose only window has two panes running the given commands."""
+    picker.new_session("split")
+    picker.inner.run("split-window", "-d", "-t", "=split:")
+    picker.inner.run("send-keys", "-t", "=split:.0", top, "Enter")
+    picker.inner.run("send-keys", "-t", "=split:.1", bottom, "Enter")
+    settle(picker, quiet=0.3)
+
+
+def test_preview_shows_every_pane_of_the_window(picker: Picker) -> None:
+    _split(picker, "echo PANE-ZERO", "echo PANE-ONE")
+    picker.open()
+    picker.select("split")
+    wait_for(
+        lambda: "PANE-ZERO" in picker.screen() and "PANE-ONE" in picker.screen(),
+        what="both panes in the preview",
+    )
+
+
+def test_each_pane_shows_its_latest_output(picker: Picker) -> None:
+    """Both panes' last lines fit, even when each pane holds more than the preview."""
+    _split(picker, "seq 1 100; echo ZERO-END", "seq 1 100; echo ONE-END")
+    picker.open()
+    picker.select("split")
+    wait_for(
+        lambda: "ZERO-END" in picker.screen() and "ONE-END" in picker.screen(),
+        what="the last line of both panes",
+    )

@@ -108,6 +108,16 @@ class Picker:
                 return session
         return None
 
+    def client_window(self) -> str | None:
+        """Window name this pane's client is looking at, or None if it has detached."""
+        tty = self.outer.run("display", "-p", "-t", self.pane, "#{pane_tty}", check=False).strip()
+        out = self.inner.run("list-clients", "-F", "#{client_tty}\t#{window_name}", check=False)
+        for line in out.splitlines():
+            client, _, window = line.partition("\t")
+            if client == tty:
+                return window
+        return None
+
     def attach_another(self, session: str) -> Picker:
         """A second client, in its own outer window, attached to `session`."""
         name = f"c{len(self.clients) + 2}"

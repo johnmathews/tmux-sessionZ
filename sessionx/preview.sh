@@ -3,9 +3,11 @@
 # Usage: preview.sh STATE_DIR KEY            render the preview
 #        preview.sh STATE_DIR --window KEY   print the window id being previewed
 #   KEY = d:/path   list the directory (zoxide mode)
-#   KEY = $id       one window of that session (its active pane) under a two-line
-#                   header: the session, then every window with the previewed one
-#                   highlighted and the active one starred
+#   KEY = $id       one window of that session under a two-line header: the
+#                   session, then every window with the previewed one highlighted
+#                   and the active one starred. A window with several panes shows
+#                   them stacked in index order, each under a label and cut to its
+#                   last lines so that all of them fit the preview height.
 # The previewed window is the session's active window unless left/right chose
 # another: action.sh records that as "<session_id>\t<window_id>" in
 # STATE_DIR/window, and it only applies while that session is the one shown.
@@ -52,5 +54,23 @@ printf '%s%s%s%s · %s window(s)%s%s\n' "$bold" "$(tmux display-message -p -t "$
 # One segment per window, rendered by tmux itself (unnamed windows show their command).
 tmux list-windows -t "$key" -F "#{?#{==:#{window_id},$win},$rev,}#{window_index}: #{?window_name,#{window_name},#{pane_current_command}}#{?window_active,*,}$reset" |
     awk '{ printf "%s%s", (NR > 1 ? "   " : ""), $0 } END { print "" }'
-# Trailing blank lines would push the real content above the fold under `follow`.
-tmux capture-pane -e -p -t "$win" | awk '{ line[NR] = $0 } /[^[:space:]]/ { last = NR } END { for (i = 1; i <= last; i++) print line[i] }'
+# Pane contents without trailing blank lines, which would otherwise push the real
+# content above the fold under `follow`.
+capture() {
+    tmux capture-pane -e -p -t "$1" |
+        awk '{ line[NR] = $0 } /[^[:space:]]/ { last = NR } END { for (i = 1; i <= last; i++) print line[i] }'
+}
+
+panes=$(tmux list-panes -t "$win" -F "#{pane_id} ${dim}── pane #{pane_index}: #{pane_current_command}#{?pane_active,*,} ──${reset}")
+count=$(printf '%s\n' "$panes" | wc -l)
+if ((count == 1)); then
+    capture "$win"
+    exit 0
+fi
+# Share the lines below the header between the panes, one line of each for its label.
+per=$(((${FZF_PREVIEW_LINES:-40} - 2) / count - 1))
+((per < 1)) && per=1
+while IFS= read -r pane; do
+    printf '%s\n' "${pane#* }"
+    capture "${pane%% *}" | tail -n "$per"
+done <<<"$panes"

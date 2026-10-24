@@ -71,9 +71,13 @@ fail() {
     exit 0
 }
 
+# Switch the client to session $1 and, if given, its window $2.
 switch_to() {
     local err
     err=$(tmux switch-client -c "$client" -t "$1" 2>&1) || fail "$err"
+    if [[ -n "${2:-}" ]]; then
+        err=$(tmux select-window -t "$2" 2>&1) || fail "$err"
+    fi
     printf 'abort'
 }
 
@@ -111,7 +115,8 @@ enter)
         ;;
     *)
         if [[ "$key" == \$* ]]; then
-            switch_to "$key"
+            # Land on the window being previewed (the active one unless ←/→ chose another).
+            switch_to "$key" "$("$DIR/preview.sh" "$state" --window "$key")"
         elif [[ -n "$query" ]]; then
             # Nothing matched the typed text: it is the name of a new session, verbatim.
             id=$(id_by_name "$query")
@@ -186,7 +191,7 @@ zoxide)
     esac
     ;;
 
-# Left/right: move the text cursor in a prompt or zoxide mode; otherwise cycle the
+# Left/right (and ctrl-h/ctrl-l): move the text cursor in a prompt or zoxide mode; otherwise cycle the
 # preview through the focused session's windows, wrapping at either end.
 win-next | win-prev)
     if prompting || [[ "$mode" == zoxide ]]; then
