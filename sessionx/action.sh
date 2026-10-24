@@ -24,10 +24,12 @@ client=$(<"$state/client")
 list="$state/list"
 tab=$'\t'
 
+# The header: a pointer to the key sheet and the sort order. Its second line is
+# blank on purpose, to leave a row of space above the list.
 hints() {
-    local order=recent
+    local order=recent key=$'\033[1;95m' dim=$'\033[2m' reset=$'\033[0m'
     [[ "$sort" == alpha ]] && order=A-Z
-    printf 'Sort: %s · enter switch · ^r rename · ^a new · ^q kill · ^t sort · ^f zoxide · ? preview' "$order"
+    printf '%s?%s keys  %s·%s  Sort: %s\n ' "$key" "$reset" "$dim" "$reset" "$order"
 }
 
 set_mode() { printf '%s\n' "$1" >"$state/mode"; }
@@ -130,6 +132,12 @@ enter)
     ;;
 
 esc)
+    # The key sheet sits on top of everything except a prompt; close it first.
+    if [[ -f "$state/help" ]] && ! prompting; then
+        rm -f "$state/help"
+        printf 'refresh-preview'
+        exit 0
+    fi
     case "$mode" in
     rename:*) to_sessions "${mode#rename:}" ;;
     new | zoxide) to_sessions "" ;;
@@ -211,7 +219,16 @@ win-next | win-prev)
 
 # Keys that type text in a prompt mode and drive the preview otherwise.
 '?')
-    if prompting; then printf 'put(?)'; else printf 'toggle-preview'; fi
+    # Types ? in a prompt; elsewhere toggles the key sheet in the preview pane.
+    if prompting; then
+        printf 'put(?)'
+    elif [[ -f "$state/help" ]]; then
+        rm -f "$state/help"
+        printf 'refresh-preview'
+    else
+        : >"$state/help"
+        printf 'show-preview+refresh-preview'
+    fi
     ;;
 ctrl-u)
     if prompting; then printf 'unix-line-discard'; else printf 'preview-half-page-up'; fi

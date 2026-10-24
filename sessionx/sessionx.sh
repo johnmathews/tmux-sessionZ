@@ -25,6 +25,8 @@ fzf --tmux center,75%,75% \
     --delimiter '\t' --with-nth 2 \
     --border rounded --border-label " Current session: \"$current_name\" " \
     --prompt '> ' --pointer '▶' \
+    --ansi --info hidden --highlight-line \
+    --color 'bg+:bright-magenta,fg+:black:bold,hl+:black:bold:underline,pointer:black' \
     --header "$("$DIR/action.sh" "$state" hints)" \
     --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window 'right,55%,follow,~1' \
     --bind "start:pos(${line:-1})" \
@@ -36,6 +38,7 @@ fzf --tmux center,75%,75% \
     --bind "ctrl-t:transform($act sort {1})" \
     --bind "ctrl-f:transform($act zoxide)" \
     --bind "?:transform($act '?')" \
+    --bind "alt-p:toggle-preview" \
     --bind "ctrl-u:transform($act ctrl-u)" \
     --bind "ctrl-d:transform($act ctrl-d)" \
     --bind "right:transform($act win-next {1})" \

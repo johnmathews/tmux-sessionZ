@@ -132,6 +132,10 @@ class Picker:
     def screen(self) -> str:
         return self.outer.run("capture-pane", "-p", "-t", self.pane, check=False)
 
+    def screen_ansi(self) -> str:
+        """The screen with colours and attributes kept as escape sequences."""
+        return self.outer.run("capture-pane", "-e", "-p", "-t", self.pane, check=False)
+
     def selected(self) -> str | None:
         """Display text of the line under the picker's cursor."""
         for line in self.screen().splitlines():

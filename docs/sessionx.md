@@ -3,7 +3,7 @@
 > Purpose: how the session picker in `sessionx/` works, why it is built this way, and how to test it.
 > Read this before changing any binding.
 
-**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 42 passed).
+**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 49 passed).
 
 ## 1. What it is
 
@@ -18,7 +18,9 @@ The preview's height is shared by water-filling: a pane short enough to fit is s
 remaining lines go to the longer panes, which reach back into their scrollback to use them. Stacking
 keeps every pane readable at the preview's width; a side-by-side split is therefore shown one pane above
 the other. Each pane ends at its last non-blank line, so the prompt or latest output is in view. The prompt sits at the top
-(`--layout reverse`), so the most recent session is directly under it. It replaced a wrapper around the
+(`--layout reverse`). Under it, a short header (`? keys · Sort: recent`) and a blank row, then the list
+with the most recent session first. The selected row is highlighted across its full width in bright
+magenta (`--highlight-line`, `bg+:bright-magenta`). fzf's match counter is hidden (`--info hidden`). It replaced a wrapper around the
 `omerxx/tmux-sessionx` plugin in October 2026. The evaluation that led to the rewrite is summarised in
 `journal/261024-sessionx-rewrite.md`.
 
@@ -32,7 +34,8 @@ the other. Each pane ends at its last non-blank line, so the prompt or latest ou
 | `ctrl-t` | Toggle sort: recent ↔ A-Z |
 | `ctrl-f` | Toggle the list to zoxide directories; `enter` on one switches to the session named after the directory, or creates it there |
 | `←` / `→`, `ctrl-h` / `ctrl-l` | Preview the previous / next window of the selected session (in a prompt or zoxide mode: move the text cursor) |
-| `?` | Toggle the preview (in a prompt mode: types `?`) |
+| `?` | Show / hide the key sheet in the preview pane, in two columns when it is wide enough (in a prompt mode: types `?`) |
+| `alt-p` | Show / hide the preview |
 | `ctrl-u` / `ctrl-d` | Scroll the preview (in a prompt mode: clear line / delete char) |
 
 Failed tmux actions show their error in the header instead of failing silently.
@@ -63,9 +66,10 @@ name). No `execute()` takes over the terminal, so there is no post-redraw cursor
 
 ### 2.4 One helper, per-instance state
 
-fzf calls `action.sh <state-dir> <verb> [field1] [query]` for every bound key, so one place decides what a
-key means in each mode (`?` toggles the preview in the list but types `?` in a prompt; `?` therefore
-cannot be typed into the search). The
+fzf calls `action.sh <state-dir> <verb> [field1] [query]` for every bound key except `alt-p` (a plain
+`toggle-preview`), so one place decides what a key means in each mode (`?` opens the key sheet in the
+list but types `?` in a prompt; `?` therefore cannot be typed into the search). `esc` closes the key sheet
+before it closes anything else. The
 helper performs the tmux call and prints the fzf actions to run next (`transform`). The current mode
 (`sessions`, `zoxide`, `rename:<id>`, `new`), sort order, client tty and list files live in a
 `mktemp -d` directory owned by one picker instance and removed on exit. Nothing is written to tmux
@@ -91,7 +95,7 @@ Tested with fzf 0.74.5 (`--tmux`, `--with-shell`, `transform`), tmux 3.8 and bas
 ## 3. Tests
 
 ```bash
-uv run pytest            # ~80 s; private tmux servers (-L), never your running one
+uv run pytest            # ~90 s; private tmux servers (-L), never your running one
 ```
 
 Each test starts two private servers (`tmux -L sxt-<random>`). The *inner* one holds the sessions under

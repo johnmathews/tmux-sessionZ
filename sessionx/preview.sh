@@ -32,6 +32,53 @@ previewed_window() {
     tmux display-message -p -t "$session" '#{window_id}'
 }
 
+# The key sheet, shown instead of any preview while STATE_DIR/help exists (`?`).
+# Two columns side by side when the preview is wide enough, otherwise stacked.
+# Padding is computed on visible characters (escape codes stripped, counted in
+# UTF-8), because printf's %-Ns counts bytes and the arrows are three bytes each.
+visible_width() {
+    printf '%s' "$1" | sed $'s/\033\\[[0-9;]*m//g' | LC_ALL=en_US.UTF-8 wc -m | tr -d ' '
+}
+pad_to() {
+    local n
+    n=$(($2 - $(visible_width "$1")))
+    ((n < 1)) && n=1
+    printf '%s%*s' "$1" "$n" ''
+}
+key_sheet() {
+    local key=$'\033[1;95m' title=$'\033[1;96m' reset=$'\033[0m' width=${FZF_PREVIEW_COLUMNS:-80}
+    local -a left right
+    row() { printf '  %s%s%s%s' "$key" "$(pad_to "$1" 11)" "$reset" "$2"; }
+    left=("${title}Sessions${reset}"
+        "$(row enter 'go to previewed window')"
+        "$(row 'type+enter' 'create named session')"
+        "$(row ctrl-a 'new session')"
+        "$(row ctrl-r 'rename session')"
+        "$(row ctrl-q 'kill session')"
+        "$(row ctrl-t 'sort recent / A-Z')"
+        "$(row ctrl-f 'zoxide directories')"
+        "$(row esc 'close / cancel')")
+    right=("${title}Preview${reset}"
+        "$(row '←  →' 'previous / next window')"
+        "$(row 'ctrl-h  l' 'previous / next window')"
+        "$(row 'ctrl-u  d' 'scroll preview')"
+        "$(row alt-p 'show / hide preview')"
+        "$(row '?' 'show / hide keys')")
+    if ((width >= 72)); then
+        local i
+        for ((i = 0; i < ${#left[@]}; i++)); do
+            printf '%s%s\n' "$(pad_to "${left[i]}" 37)" "${right[i]:-}"
+        done
+    else
+        printf '%s\n' "${left[@]}" '' "${right[@]}"
+    fi
+}
+
+if [[ -f "$state/help" ]]; then
+    key_sheet
+    exit 0
+fi
+
 if [[ "${1:-}" == --window ]]; then
     previewed_window "$2"
     exit 0
