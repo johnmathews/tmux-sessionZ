@@ -135,7 +135,8 @@ class Picker:
         return None
 
     def is_open(self) -> bool:
-        return "Current session" in self.screen()
+        # The popup's top-left corner: only the picker's bold frame draws it.
+        return "┏" in self.screen()
 
     # --- input --------------------------------------------------------------
 
