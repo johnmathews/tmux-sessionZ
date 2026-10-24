@@ -6,7 +6,7 @@
 # fzf allows duplicate --bind for the same key; the last one wins.
 #
 # Custom bindings added by this wrapper:
-#   ctrl-r  Rename session (reloads list, cursor follows renamed session)
+#   ctrl-r  Rename session (prompt pre-filled with current name; cursor follows renamed session)
 #   ctrl-a  New session (prompts for name)
 #   ctrl-q  Kill/close session (all its windows)
 #   ctrl-t  Toggle sort: most recently active (default) <-> alphabetical
@@ -92,10 +92,12 @@ if [[ -n "$LINE_NUM" ]]; then
 fi
 
 # --- 2. ctrl-r: rename session ---
-# execute: prompt for new name, rename, save new name to tmpfile
+# execute: prompt for new name (pre-filled with the current name), rename, save new name to tmpfile
 # reload-sync: refresh with chronological list
 # transform: compute cursor position for renamed session
-RENAME_EXEC="bash -c 'printf >&2 \"New name: \";read name; tmux rename-session -t {1} \"\${name}\"; echo \"\${name}\" > ${RENAME_TMPFILE};'"
+# Pre-filling needs `read -e -i` (bash 4+); macOS /bin/bash is 3.2, so use Homebrew bash.
+# An empty answer leaves the session unchanged.
+RENAME_EXEC="/opt/homebrew/bin/bash -c 'cur={1}; cur=\${cur%%:*}; read -e -p \"New name: \" -i \"\${cur}\" name; [[ -n \"\${name}\" ]] || name=\"\${cur}\"; tmux rename-session -t \"\${cur}\" \"\${name}\"; echo \"\${name}\" > ${RENAME_TMPFILE};'"
 args+=(--bind "ctrl-r:execute($RENAME_EXEC)+reload-sync($LIST_CMD)+transform($REPOS_CMD --session \$(cat $RENAME_TMPFILE 2>/dev/null))")
 
 # --- Window-mode-only bindings ---
