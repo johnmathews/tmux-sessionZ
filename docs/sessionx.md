@@ -15,14 +15,14 @@ the current session and a tree of all sessions and windows on the right. The pro
 
 | Key | Action |
 | --- | --- |
-| `enter` | Switch to the selected session. With no match, create a session named exactly as typed |
+| `enter` | Switch to the selected session. With no match, switch to the session named exactly as typed, or create it in the client's current directory |
 | `esc` | Close, or leave the rename/new/zoxide mode |
 | `ctrl-r` | Rename the selected session; the prompt starts from its full name. An empty name cancels |
-| `ctrl-a` | New session (stays in the picker, cursor on it) |
+| `ctrl-a` | New session (stays in the picker, cursor on it). An empty name cancels |
 | `ctrl-q` | Kill the selected session. Clients on it move to the most recent other session first; the last session cannot be killed |
 | `ctrl-t` | Toggle sort: recent ↔ A-Z |
 | `ctrl-f` | Toggle the list to zoxide directories; `enter` on one switches to the session named after the directory, or creates it there |
-| `?` | Toggle the preview |
+| `?` | Toggle the preview (in a prompt mode: types `?`) |
 | `ctrl-u` / `ctrl-d` | Scroll the preview (in a prompt mode: clear line / delete char) |
 
 Failed tmux actions show their error in the header instead of failing silently.
@@ -53,7 +53,9 @@ name). No `execute()` takes over the terminal, so there is no post-redraw cursor
 
 ### 2.4 One helper, per-instance state
 
-fzf calls `action.sh <state-dir> <verb> [field1] [query]` for every key except preview toggling. The
+fzf calls `action.sh <state-dir> <verb> [field1] [query]` for every bound key, so one place decides what a
+key means in each mode (`?` toggles the preview in the list but types `?` in a prompt; `?` therefore
+cannot be typed into the search). The
 helper performs the tmux call and prints the fzf actions to run next (`transform`). The current mode
 (`sessions`, `zoxide`, `rename:<id>`, `new`), sort order, client tty and list files live in a
 `mktemp -d` directory owned by one picker instance and removed on exit. Nothing is written to tmux
@@ -79,7 +81,7 @@ Tested with fzf 0.74.5 (`--tmux`, `--with-shell`, `transform`), tmux 3.8 and bas
 ## 3. Tests
 
 ```bash
-uv run pytest            # about a minute; never touches your running tmux server
+uv run pytest            # ~50 s; private tmux servers (-L), never your running one
 ```
 
 Each test starts two private servers (`tmux -L sxt-<random>`). The *inner* one holds the sessions under
@@ -90,5 +92,6 @@ with `capture-pane`. Helpers live in `tests/conftest.py` (`open`, `select`, `pre
 
 `SESSIONX_ENTRY=<path>` runs the suite against another entry script. That is how the old wrapper was shown
 to fail every finding-tagged case before the rewrite: check out `scripts/` from commit `4be4389`, then run
-`SESSIONX_ENTRY=scripts/sessionx-wrapper.sh uv run pytest` (17 failed, 6 passed). `tests/test_shellcheck.py` lints every script beside
+`SESSIONX_ENTRY=scripts/sessionx-wrapper.sh uv run pytest` (17 failed, 6 passed). That run also needs the
+plugin at `~/.tmux/plugins/tmux-sessionx`, which TPM clean removes once the `@plugin` line is gone. `tests/test_shellcheck.py` lints every script beside
 the entry.

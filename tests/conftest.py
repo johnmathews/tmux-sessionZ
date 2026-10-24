@@ -158,7 +158,12 @@ class Picker:
                     break
                 previous = current
                 self.press(key)
-                wait_for(lambda: self.selected() != current, timeout=1.0, what=f"cursor to move {key}", soft=True)
+                wait_for(
+                    lambda before=current: self.selected() != before,
+                    timeout=1.0,
+                    what=f"cursor to move {key}",
+                    soft=True,
+                )
         raise AssertionError(f"could not select {name!r}; screen:\n{self.screen()}")
 
 

@@ -7,7 +7,6 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-
 from conftest import Picker, wait_for
 
 pytestmark = pytest.mark.skipif(shutil.which("zoxide") is None, reason="zoxide not installed")

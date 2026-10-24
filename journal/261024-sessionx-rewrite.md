@@ -53,7 +53,29 @@ attached session, switch the client then kill.
 - Dropped plugin keys: `ctrl-x`, `ctrl-e`, `ctrl-w`, `ctrl-b`, `alt-bspace`, and window mode with
   `ctrl-y/g/x`.
 
-## 6. Follow-ups
+## 6. Wrap-up changes
+
+- An independent docs audit found two false statements: CLAUDE.md claimed every `action.sh` output ends
+  in `change-header:`, and `docs/sessionx.md` said `?` bypasses `action.sh`. Both are corrected. It also
+  found under-described Enter, `ctrl-a` and zoxide behaviour and a version overclaim, all fixed.
+- `ctrl-q` now refuses to kill when a client on the session cannot be moved first. Before, the kill went
+  ahead and detached that client. No test covers this branch: forcing `switch-client` to fail in the
+  harness was not attempted (status: confirmed by reading only).
+- ruff added (`[tool.ruff]` in `pyproject.toml`). It caught two late-binding lambdas in loops in the
+  tests (`select()`, the consecutive-kills case), which happened to work because each lambda ran before
+  the loop variable changed.
+- Suite after all fixes: 23 passed (pytest exit 0). Coverage measures only the Python harness (99%); the
+  bash picker has no coverage tooling.
+
+## 7. What is deliberately not done
+
+- Window mode: dropped at the plan gate. It can return on window ids (`@5`) using the same pattern.
+- The full tmux config was never loaded in a test server, because continuum's restore and save would act
+  on the real resurrect files. The config change was checked with `source-file -n` (parse only).
+- No upstream report to `omerxx/tmux-sessionx` about the `{1}`, prefix-grep and space-truncation bugs.
+- No CI: the repo has no remote.
+
+## 8. Follow-ups
 
 - `plugins/tmux-sessionx` stays on disk, with three uncommitted local edits, until TPM clean
   (`prefix alt-u`) removes it.

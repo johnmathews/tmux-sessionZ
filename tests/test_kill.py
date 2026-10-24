@@ -53,7 +53,7 @@ def test_consecutive_kills_each_remove_the_selection(picker: Picker) -> None:
     for name in ("k1", "k2", "k3"):
         picker.select(name)
         picker.press("C-q")
-        wait_for(lambda: name not in picker.names(), what=f"{name!r} to be killed")
+        wait_for(lambda gone=name: gone not in picker.names(), what=f"{name!r} to be killed")
         settle(picker, quiet=0.2)
     assert picker.names() == ["home"]
 

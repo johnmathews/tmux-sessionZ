@@ -6,3 +6,7 @@ __pycache__/
 htmlcov/
 .claude/
 .engineering-team/
+.env
+*.pem
+*.key
+credentials.json

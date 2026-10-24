@@ -8,8 +8,9 @@
 #   QUERY      the current query, which is the name being typed in prompt modes
 #
 # Modes (STATE_DIR/mode): sessions | zoxide | new | rename:<session_id>
-# Every printed action list ends with change-header:..., whose argument runs to
-# the end of the string, so tmux error text needs no escaping.
+# Free text (headers, the prefilled rename query) is always printed last, in the
+# colon form (change-header:..., change-query:...), whose argument runs to the
+# end of the string, so names and tmux error text need no escaping.
 set -u
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 state="$1"
@@ -45,6 +46,12 @@ id_by_name() {
         awk -F"$tab" -v name="$1" '$2 == name { print $1; exit }'
 }
 
+# First line of a (possibly multi-line) tmux error, safe to put in a header.
+first_line() { head -n 1 <<<"$1"; }
+
+# New detached session named $1 in directory $2; prints its id, or the error on failure.
+create_session() { tmux new-session -d -s "$1" -c "$2" -P -F '#{session_id}' 2>&1; }
+
 # Leave a prompt or zoxide mode: back to the session list, cursor on session $1.
 # reload-sync blocks until the list (and the cleared query) is applied, so the
 # pos() that follows lands on the reloaded list rather than being overwritten.
@@ -60,7 +67,7 @@ to_sessions() {
 
 # Print an error in the header and stop.
 fail() {
-    printf 'change-header:⚠ %s' "$(head -n 1 <<<"$1")"
+    printf 'change-header:⚠ %s' "$(first_line "$1")"
     exit 0
 }
 
@@ -82,14 +89,14 @@ enter)
     rename:*)
         id="${mode#rename:}"
         if [[ -n "$query" ]]; then
-            err=$(tmux rename-session -t "$id" -- "$query" 2>&1) || { to_sessions "$id" "⚠ $err"; exit 0; }
+            err=$(tmux rename-session -t "$id" -- "$query" 2>&1) ||
+                { to_sessions "$id" "⚠ $(first_line "$err")"; exit 0; }
         fi
         to_sessions "$id"
         ;;
     new)
         [[ -n "$query" ]] || { to_sessions ""; exit 0; }
-        id=$(tmux new-session -d -s "$query" -c "$(client_path)" -P -F '#{session_id}' 2>&1) ||
-            { to_sessions "" "⚠ $id"; exit 0; }
+        id=$(create_session "$query" "$(client_path)") || { to_sessions "" "⚠ $(first_line "$id")"; exit 0; }
         to_sessions "$id"
         ;;
     zoxide)
@@ -98,7 +105,7 @@ enter)
         name=$(basename "$path")
         id=$(id_by_name "$name")
         if [[ -z "$id" ]]; then
-            id=$(tmux new-session -d -s "$name" -c "$path" -P -F '#{session_id}' 2>&1) || fail "$id"
+            id=$(create_session "$name" "$path") || fail "$id"
         fi
         switch_to "$id"
         ;;
@@ -109,7 +116,7 @@ enter)
             # Nothing matched the typed text: it is the name of a new session, verbatim.
             id=$(id_by_name "$query")
             if [[ -z "$id" ]]; then
-                id=$(tmux new-session -d -s "$query" -c "$(client_path)" -P -F '#{session_id}' 2>&1) || fail "$id"
+                id=$(create_session "$query" "$(client_path)") || fail "$id"
             fi
             switch_to "$id"
         fi
@@ -132,9 +139,11 @@ kill)
     # Move every client on the doomed session to the most recent other one first;
     # with detach-on-destroy on, killing it under them would detach them.
     fallback=$("$DIR/list.sh" recent | awk -F"$tab" -v id="$key" '$1 != id { print $1; exit }')
-    tmux list-clients -t "$key" -F '#{client_tty}' 2>/dev/null | while IFS= read -r tty; do
-        tmux switch-client -c "$tty" -t "$fallback"
-    done
+    # Refuse rather than kill if any client cannot be moved: it would be detached.
+    while IFS= read -r tty; do
+        [[ -n "$tty" ]] || continue
+        err=$(tmux switch-client -c "$tty" -t "$fallback" 2>&1) || fail "$err"
+    done < <(tmux list-clients -t "$key" -F '#{client_tty}' 2>/dev/null)
     err=$(tmux kill-session -t "$key" 2>&1) || fail "$err"
     refresh
     # Keep the cursor at the same row, clamped to the shrunken result list.
