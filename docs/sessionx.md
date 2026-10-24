@@ -22,7 +22,8 @@ the other. Each pane ends at its last non-blank line, so the prompt or latest ou
 with the most recent session first. The selected row is highlighted across its full width in
 the accent green (`--highlight-line`, `bg+:82`); the gutter is blank (`--gutter ' '`, `gutter:-1`): fzf otherwise draws a `▌` beside every unselected row.
 The accent is the tmux status bar's green, `#5fff00` (`tmux_conf_theme_colour_11`), which is colour 82
-of the 256-colour palette; key names, pane rules and the selection use it, section titles use bright cyan. fzf's match counter is hidden (`--info hidden`). It replaced a wrapper around the
+of the 256-colour palette; the selection, the header's `?` and the pane rules use it. In the key sheet the key names are hot pink
+(bright magenta, `\033[1;95m`) and the section titles bright cyan. fzf's match counter is hidden (`--info hidden`). It replaced a wrapper around the
 `omerxx/tmux-sessionx` plugin in October 2026. The evaluation that led to the rewrite is summarised in
 `journal/261024-sessionx-rewrite.md`.
 

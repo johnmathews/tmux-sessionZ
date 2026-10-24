@@ -46,7 +46,7 @@ pad_to() {
     printf '%s%*s' "$1" "$n" ''
 }
 key_sheet() {
-    local key=$'\033[1;38;5;82m' title=$'\033[1;96m' reset=$'\033[0m' width=${FZF_PREVIEW_COLUMNS:-80}
+    local key=$'\033[1;95m' title=$'\033[1;96m' reset=$'\033[0m' width=${FZF_PREVIEW_COLUMNS:-80}
     local -a left right
     row() { printf '  %s%s%s%s' "$key" "$(pad_to "$1" 11)" "$reset" "$2"; }
     left=("${title}Sessions${reset}"

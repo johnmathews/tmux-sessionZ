@@ -32,3 +32,11 @@ unselected row in the gutter colour, which with `-1` is the terminal's default f
 this change the glyph had been dark grey (fzf's default) and then pink (inheriting `bg+`), so it had
 never stood out. `--gutter ' '` makes the glyph a space. `test_no_gutter_bar_beside_unselected_rows`
 failed before the fix (`▌ alpha`) and passes after; full suite 51 passed.
+
+## 5. Follow-up: key-sheet keys back to hot pink
+
+At the user's request the key names in the `?` sheet are bright magenta again (`\033[1;95m`, drawn as
+hot pink by the user's terminal), as they were before the green change. Everything else stays green.
+The "no pink anywhere" test became "pink only on key-sheet key names": no pink with the sheet closed, and
+pink before `ctrl-q`/`ctrl-r`/`enter` but not before the section titles with it open. It failed before
+this change (`ctrl-q` green) and passes after; full suite 51 passed.

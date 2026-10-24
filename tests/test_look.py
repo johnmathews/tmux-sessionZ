@@ -24,17 +24,25 @@ def test_selected_row_has_a_background_colour(picker: Picker) -> None:
     assert selected and GREEN_BG.search(selected[0]), selected
 
 
-def test_no_pink_anywhere_and_no_coloured_gutter(picker: Picker) -> None:
-    """The accent moved from magenta to green; unselected rows carry no accent background."""
+def test_pink_only_on_key_sheet_keys_and_no_coloured_gutter(picker: Picker) -> None:
+    """Green is the accent; the key sheet's key names alone are hot pink (bright magenta)."""
     for name in ("alpha", "beta"):
         picker.new_session(name)
     picker.open()
-    picker.press("?")
-    wait_for(lambda: "kill session" in picker.screen(), what="key sheet")
     screen = picker.screen_ansi()
     assert not PINK.search(screen), [line for line in screen.splitlines() if PINK.search(line)][:2]
     unselected = [line for line in screen.splitlines() if "▶" not in line and ("alpha" in line or "beta" in line)]
     assert unselected and not any(GREEN_BG.search(line) for line in unselected), unselected
+    picker.press("?")
+    wait_for(lambda: "kill session" in picker.screen(), what="key sheet")
+    sheet = picker.screen_ansi().splitlines()
+    for key in ("ctrl-q", "ctrl-r", "enter"):
+        line = next(line for line in sheet if key in line)
+        before_key = line[: line.index(key)]
+        assert PINK.search(before_key), (key, line)
+    for title in ("Sessions", "Preview"):
+        line = next(line for line in sheet if title in line)
+        assert not PINK.search(line[: line.index(title)]), (title, line)
 
 
 def test_no_match_counter(picker: Picker) -> None:
