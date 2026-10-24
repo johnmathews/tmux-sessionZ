@@ -69,7 +69,11 @@ class Tmux:
         return proc.stdout
 
     def kill(self) -> None:
+        # tmux 3.8 leaves the socket file behind after kill-server; remove it so runs don't accumulate them.
+        socket = self.run("display-message", "-p", "#{socket_path}", check=False).strip()
         self.run("kill-server", check=False)
+        if socket:
+            Path(socket).unlink(missing_ok=True)
 
 
 @dataclass
