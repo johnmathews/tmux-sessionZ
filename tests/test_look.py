@@ -8,13 +8,55 @@ from conftest import Picker, settle, strip_age, wait_for
 # re-encode it as 48;5;82 or as RGB. fzf's default theme already gives the current
 # line a faint grey background, so any-background is not enough.
 GREEN_BG = re.compile(r"\x1b\[(?:[0-9;]*;)?48;(?:5;82|2;95;255;0)[;m]")
+GREEN_FG = re.compile(r"\x1b\[(?:[0-9;]*;)?(?:38;5;82|38;2;95;255;0|92)[;m]")
 PINK = re.compile(r"\x1b\[(?:[0-9;]*;)?(?:35|95|45|105|[34]8;5;(?:5|13))[;m]")
 
 
 def _left(line: str) -> str:
     """The list column of a popup line: text between the popup border and the preview border."""
-    inner = line.split("│", 1)[1] if "│" in line else line
-    return re.split(r"[│╭╰]", inner, maxsplit=1)[0].strip()
+    inner = line.split("┃", 1)[1] if "┃" in line else line
+    return re.split(r"[│╭╰┃]", inner, maxsplit=1)[0].strip()
+
+
+def test_popup_border_is_bold_and_green(picker: Picker) -> None:
+    """The popup's outline uses heavy box lines in the accent, so it stands out from the pane under it."""
+    picker.open()
+    lines = picker.screen_ansi().splitlines()
+    top = next(line for line in lines if "Current session" in line)
+    bottom = next(line for line in reversed(lines) if "┗" in line or "╰" in line)
+    sides = [line for line in lines if "> " in line or "▶" in line]
+    plain = [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in (top, bottom, *sides)]
+    assert "┏" in plain[0] and "┓" in plain[0], plain[0]
+    assert "┗" in plain[1] and "┛" in plain[1], plain[1]
+    assert all(line.lstrip().startswith("┃") for line in plain[2:]), plain[2:]
+    for line, corner in ((top, "┏"), (bottom, "┗")):
+        assert GREEN_FG.search(line[: line.index(corner)]), line
+    # Only the outer frame carries the accent: the preview border and the prompt rule stay grey.
+    preview_top = next(line for line in lines if "╭" in line)
+    assert not GREEN_FG.search(_fg_before(preview_top, "╭")), preview_top
+    rule = next(line for line in lines if "┃ ──" in re.sub(r"\x1b\[[0-9;]*m", "", line))
+    assert not GREEN_FG.search(_fg_before(rule, "──")), rule
+
+
+def _fg_before(line: str, glyph: str) -> str:
+    """The last foreground colour set before `glyph`, as an escape: the colour the glyph is drawn in."""
+    fg = ""
+    for params in re.findall(r"\x1b\[([0-9;]*)m", line[: line.index(glyph)]):
+        codes = params.split(";")
+        i = 0
+        while i < len(codes):
+            code = codes[i]
+            if code in ("38", "48"):
+                width = 3 if codes[i + 1 : i + 2] == ["5"] else 5
+                if code == "38":
+                    fg = f"\x1b[{';'.join(codes[i : i + width])}m"
+                i += width
+                continue
+            if code in ("0", "", "39") or re.fullmatch(r"3[0-7]|9[0-7]", code):
+                fg = f"\x1b[{code}m"
+            i += 1
+    assert fg, (glyph, line)
+    return fg
 
 
 def test_selected_row_has_a_background_colour(picker: Picker) -> None:
