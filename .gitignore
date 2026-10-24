@@ -1,1 +1,8 @@
 plugins/
+.venv/
+.pytest_cache/
+__pycache__/
+.coverage
+htmlcov/
+.claude/
+.engineering-team/
