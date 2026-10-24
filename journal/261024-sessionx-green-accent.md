@@ -24,3 +24,11 @@ The pink bar down the left of the list was fzf's gutter, which inherits `bg+` by
 
 - The colour is not read from the tmux theme at runtime; changing `tmux_conf_theme_colour_11` will not
   change the picker.
+
+## 4. Follow-up the same day: the white column
+
+`gutter:-1` removed the pink background but not the gutter itself. fzf draws a `▌` glyph beside every
+unselected row in the gutter colour, which with `-1` is the terminal's default foreground (white). Before
+this change the glyph had been dark grey (fzf's default) and then pink (inheriting `bg+`), so it had
+never stood out. `--gutter ' '` makes the glyph a space. `test_no_gutter_bar_beside_unselected_rows`
+failed before the fix (`▌ alpha`) and passes after; full suite 51 passed.

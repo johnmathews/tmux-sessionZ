@@ -98,3 +98,13 @@ def test_alt_p_toggles_the_preview(picker: Picker) -> None:
     wait_for(lambda: "PREVIEW-MARK" not in picker.screen(), what="preview hidden")
     picker.press("M-p")
     wait_for(lambda: "PREVIEW-MARK" in picker.screen(), what="preview shown again")
+
+
+def test_no_gutter_bar_beside_unselected_rows(picker: Picker) -> None:
+    """fzf draws a gutter glyph (▌) left of every unselected row; it must be blank."""
+    for name in ("alpha", "beta"):
+        picker.new_session(name)
+    picker.open()
+    rows = [line for line in picker.screen().splitlines() if "▶" not in line and re.search(r"\b(alpha|beta)\b", line)]
+    assert len(rows) == 2, rows
+    assert not any("▌" in row for row in rows), rows

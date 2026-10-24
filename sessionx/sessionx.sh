@@ -25,7 +25,7 @@ fzf --tmux center,75%,75% \
     --delimiter '\t' --with-nth 2 \
     --border rounded --border-label " Current session: \"$current_name\" " \
     --prompt '> ' --pointer '▶' \
-    --ansi --info hidden --highlight-line \
+    --ansi --info hidden --highlight-line --gutter ' ' \
     --color 'bg+:82,fg+:black:bold,hl+:black:bold:underline,pointer:black,gutter:-1' \
     --header "$("$DIR/action.sh" "$state" hints)" \
     --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window 'right,55%,follow,~1' \

@@ -3,7 +3,7 @@
 > Purpose: how the session picker in `sessionx/` works, why it is built this way, and how to test it.
 > Read this before changing any binding.
 
-**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 50 passed).
+**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 51 passed).
 
 ## 1. What it is
 
@@ -20,7 +20,7 @@ keeps every pane readable at the preview's width; a side-by-side split is theref
 the other. Each pane ends at its last non-blank line, so the prompt or latest output is in view. The prompt sits at the top
 (`--layout reverse`). Under it, a short header (`? keys · Sort: recent`) and a blank row, then the list
 with the most recent session first. The selected row is highlighted across its full width in
-the accent green (`--highlight-line`, `bg+:82`); the gutter keeps the default background (`gutter:-1`).
+the accent green (`--highlight-line`, `bg+:82`); the gutter is blank (`--gutter ' '`, `gutter:-1`): fzf otherwise draws a `▌` beside every unselected row.
 The accent is the tmux status bar's green, `#5fff00` (`tmux_conf_theme_colour_11`), which is colour 82
 of the 256-colour palette; key names, pane rules and the selection use it, section titles use bright cyan. fzf's match counter is hidden (`--info hidden`). It replaced a wrapper around the
 `omerxx/tmux-sessionx` plugin in October 2026. The evaluation that led to the rewrite is summarised in
