@@ -29,6 +29,22 @@ def _last_output(picker: Picker, session: str) -> int:
     return max(int(v) for v in out.split())
 
 
+def _quiet(picker: Picker, session: str) -> int:
+    """Wait until the session has printed nothing for over a second; return its last output time.
+
+    A new session's shell prints its prompt shortly after starting. On a slow machine that lands after the
+    test's first read, moving the activity time by a second (seen in CI as 299 s shown as 4m, not 5m).
+    """
+    previous = _last_output(picker, session)
+    stable_since = time.monotonic()
+    while time.monotonic() - stable_since < 1.2:
+        time.sleep(0.1)
+        current = _last_output(picker, session)
+        if current != previous:
+            previous, stable_since = current, time.monotonic()
+    return previous
+
+
 @pytest.mark.parametrize(
     ("elapsed", "shown"),
     [
@@ -47,7 +63,7 @@ def _last_output(picker: Picker, session: str) -> int:
 )
 def test_age_format(picker: Picker, elapsed: int, shown: str) -> None:
     picker.new_session("alpha")
-    when = _last_output(picker, "alpha")
+    when = _quiet(picker, "alpha")
     ages = {name: age for _, age, name in _list(picker, now=when + elapsed)}
     assert ages["alpha"] == shown
 

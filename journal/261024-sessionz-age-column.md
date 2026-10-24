@@ -41,3 +41,11 @@ program keeps its session looking a few seconds old; that limit is documented.
 
 - No "last command" via shell hooks (e.g. zsh `preexec` writing a pane option). That would ignore output
   from long-running programs and needs per-shell setup; output time needs none.
+
+## 5. CI flake, fixed in the test
+
+The first CI run of this change failed one case: `test_age_format[300-5m]` showed `4m`. The test read
+the session's last-output time, and then the new session's shell printed its prompt about a second later,
+on the slower CI machine. `list.sh` therefore saw 299 s, which correctly displays as `4m`. This was not a
+product bug. The format cases now wait until the session has printed nothing for 1.2 s before taking the
+reference time (`_quiet`). Strongly supported by the CI log; the timing was not reproduced locally.
