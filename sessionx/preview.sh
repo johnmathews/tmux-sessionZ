@@ -2,27 +2,21 @@
 # Preview for the line under the cursor.
 # Usage: preview.sh KEY
 #   KEY = d:/path   list the directory (zoxide mode)
-#   KEY = $id       tree of every session and its windows, with that session highlighted
-# Sessions are grouped by id taken straight from tmux, never matched by pattern,
-# so ids like $1 and $10 cannot be confused.
+#   KEY = $id       the active pane of that session, under a one-line header
+#                   naming the session and its active window
+# The header is pinned (--preview-window ~1) and the pane is shown from its last
+# non-blank line upwards (follow), so the prompt or latest output is in view.
 set -u
 key="${1:-}"
-tab=$'\t'
 
 if [[ "$key" == d:* ]]; then
     ls -la "${key#d:}"
     exit 0
 fi
+[[ "$key" == \$* ]] || exit 0
 
-bold=$'\033[1m' blue=$'\033[1;34m' dim=$'\033[2m' reset=$'\033[0m'
-previous=""
-tmux list-windows -a -F "#{session_id}${tab}#{session_name}${tab}#{session_windows}${tab}#{?session_attached, (attached),}${tab}#{window_index}${tab}#{window_name}${tab}#{?window_active,*,}" |
-    while IFS="$tab" read -r sid sname nwin attached widx wname wactive; do
-        if [[ "$sid" != "$previous" ]]; then
-            colour="$bold"
-            [[ "$sid" == "$key" ]] && colour="$blue"
-            printf '%s%s%s %s%s window(s)%s%s\n' "$colour" "$sname" "$reset" "$dim" "$nwin" "$attached" "$reset"
-            previous="$sid"
-        fi
-        printf '  %s: %s%s\n' "$widx" "$wname" "$wactive"
-    done
+bold=$'\033[1m' dim=$'\033[2m' reset=$'\033[0m'
+tmux display-message -p -t "$key" \
+    "${bold}#{session_name}${reset}${dim} · #{window_index}: #{window_name} · #{session_windows} window(s)${reset}"
+# Trailing blank lines would push the real content above the fold under `follow`.
+tmux capture-pane -e -p -t "$key" | awk '{ line[NR] = $0 } /[^[:space:]]/ { last = NR } END { for (i = 1; i <= last; i++) print line[i] }'

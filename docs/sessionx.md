@@ -3,12 +3,14 @@
 > Purpose: how the session picker in `sessionx/` works, why it is built this way, and how to test it.
 > Read this before changing any binding.
 
-**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, all green).
+**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 26 passed).
 
 ## 1. What it is
 
 `prefix o` opens an fzf popup listing every tmux session, most recently active first, with the cursor on
-the current session and a tree of all sessions and windows on the right. The prompt sits at the top
+the current session and, on the right, the selected session's active pane as it looks right now. A
+pinned header names the session, its active window and its window count. The pane is scrolled to its
+last non-blank line, so the prompt or latest output is in view. The prompt sits at the top
 (`--layout reverse`), so the most recent session is directly under it. It replaced a wrapper around the
 `omerxx/tmux-sessionx` plugin in October 2026. The evaluation that led to the rewrite is summarised in
 `journal/261024-sessionx-rewrite.md`.
@@ -68,7 +70,7 @@ options, so two pickers on two clients cannot interfere.
 | `sessionx/sessionx.sh` | Entry point; called by `run-shell` with `#{client_tty}` |
 | `sessionx/action.sh` | Every key's behaviour |
 | `sessionx/list.sh` | `id\tname` lines, `recent` or `alpha` |
-| `sessionx/preview.sh` | Session tree, or a directory listing in zoxide mode |
+| `sessionx/preview.sh` | Active pane of the session (`capture-pane -e`), or a directory listing in zoxide mode |
 
 Binding in `~/.tmux.conf.local`:
 
