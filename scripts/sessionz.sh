@@ -18,16 +18,57 @@ current=$(tmux display-message -p -c "$client" '#{session_id}')
 line=$(awk -F'\t' -v id="$current" '$1 == id { print NR; exit }' "$state/list")
 act="$(printf %q "$DIR/action.sh") $(printf %q "$state")"
 
-fzf --tmux center,75%,75% \
+# User options from tmux.conf, read on every open so a change needs no reload. The separator is not
+# whitespace, so read keeps empty (unset) fields in place.
+sep=$'\x1f'
+IFS="$sep" read -r width height list_width border blackout < <(tmux display-message -p -c "$client" \
+    "#{@sessionz-width}$sep#{@sessionz-height}$sep#{@sessionz-list-width}$sep#{@sessionz-border-color}$sep#{@sessionz-blackout}")
+
+# option VAR NAME DEFAULT REGEX: keep VAR if it matches REGEX; otherwise use DEFAULT, noting a bad value.
+ignored=""
+option() {
+    local value="${!1}"
+    if [[ -n "$value" && ! "$value" =~ $4 ]]; then
+        ignored+="${ignored:+, }$2 '$value'"
+        value=""
+    fi
+    printf -v "$1" '%s' "${value:-$3}"
+}
+option width @sessionz-width 75 '^([1-9][0-9]?|100)%?$'
+option height @sessionz-height 75 '^([1-9][0-9]?|100)%?$'
+option list_width @sessionz-list-width 25 '^[1-9][0-9]?%?$'
+option border @sessionz-border-color 82 \
+    '^(-1|[0-9]{1,2}|1[0-9]{2}|2[0-4][0-9]|25[0-5]|#[0-9a-fA-F]{6}|(bright-)?(black|red|green|yellow|blue|magenta|cyan|white))$'
+option blackout @sessionz-blackout off '^(on|off)$'
+# ## is a literal # in a tmux message, which would otherwise read it as a format.
+[[ -n "$ignored" ]] && tmux display-message -c "$client" "sessionZ: ignored ${ignored//#/##}; using the defaults"
+width=${width%\%} height=${height%\%} list_width=${list_width%\%}
+preview=$((100 - list_width))
+printf '%s\n' "$preview" >"$state/preview"
+
+# half N: half of what N% leaves of 100%, as a percentage (12.5%).
+half() {
+    local n=$((100 - $1)) rest=""
+    ((n % 2)) && rest=.5
+    printf '%d%s%%' $((n / 2)) "$rest"
+}
+if [[ "$blackout" == on ]]; then
+    # Cover the whole client and draw the panel inside a margin, so nothing behind it shows.
+    popup=(--tmux "center,100%,100%" --margin "$(half "$height"),$(half "$width")")
+else
+    popup=(--tmux "center,$width%,$height%")
+fi
+
+fzf "${popup[@]}" \
     --with-shell 'bash -c' \
     --layout reverse --sync \
     --delimiter '\t' --with-nth '2..' --nth 2 \
     --border bold \
     --prompt '> ' --pointer '▶' \
     --ansi --info hidden --highlight-line --gutter ' ' \
-    --color 'border:82,preview-border:59,separator:59,scrollbar:59,bg+:82,fg+:black:bold,hl+:black:bold:underline,pointer:black,gutter:-1' \
+    --color "border:$border,preview-border:59,separator:59,scrollbar:59,bg+:82,fg+:black:bold,hl+:black:bold:underline,pointer:black,gutter:-1" \
     --header "$("$DIR/action.sh" "$state" hints)" \
-    --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window 'right,75%,follow,~1' \
+    --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window "right,$preview%,follow,~1" \
     --bind "start:pos(${line:-1})" \
     --bind "enter:transform($act enter {1} {q})" \
     --bind "esc:transform($act esc)" \

@@ -205,9 +205,10 @@ zoxide)
         # Same three fields as a session line; the blank age keeps paths aligned with names.
         zoxide query -l | awk -v t="$tab" '{ print "d:" $0 t "    " t $0 }' >"$state/dirs"
         set_mode zoxide
-        # Paths are longer than session names: widen the list while they are shown.
+        # Paths are longer than session names: give the list at least 45% while they are shown.
+        preview=$(<"$state/preview")
         printf 'change-preview-window(%s)+change-prompt(zoxide> )+clear-query+reload-sync(cat %q)' \
-            "$(preview_spec 55%)" "$state/dirs"
+            "$(preview_spec "$((preview < 55 ? preview : 55))%")" "$state/dirs"
         printf '+change-header:enter open · ^f/esc back'
         ;;
     zoxide) to_sessions "" ;;
