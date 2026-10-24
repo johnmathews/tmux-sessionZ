@@ -32,5 +32,8 @@ def test_directory_opens_a_session_rooted_there(picker: Picker, short_dir: Path,
     picker.select(str(target))
     picker.press("Enter")
     wait_for(lambda: picker.client_session() == dirname, what=f"switch to {dirname!r}")
-    path = picker.inner.run("display", "-p", "-t", f"={dirname}", "#{session_path}").strip()
-    assert Path(path).resolve() == target
+    paths = dict(
+        line.split("\t", 1)
+        for line in picker.inner.run("list-sessions", "-F", "#{session_name}\t#{session_path}").splitlines()
+    )
+    assert Path(paths[dirname]).resolve() == target
