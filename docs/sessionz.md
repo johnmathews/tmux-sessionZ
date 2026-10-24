@@ -3,7 +3,7 @@
 > Purpose: how sessionZ works, why it is built this way, and how to test it. Read this before changing
 > any binding.
 
-**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 74 passed).
+**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 83 passed).
 
 ## 1. What it is
 
@@ -57,10 +57,11 @@ a few seconds old. Search matches names only (`--nth 2`), never ages.
 
 ### 1.4 Look
 
-The list takes a quarter of the popup's width and the preview the rest (`--preview-window right,75%`):
-session names are short and the preview is what is read. Zoxide mode widens the list to 45%
-(`change-preview-window(55%)`) because paths are long, and leaving it restores 75%. Both keep a preview
-that `alt-p` has hidden hidden.
+By default the list takes a quarter of the popup's width and the preview the rest
+(`--preview-window right,75%`): session names are short and the preview is what is read. Zoxide mode
+widens the list to at least 45% (`change-preview-window(55%)`) because paths are long, and leaving it
+restores the configured width. Both keep a preview that `alt-p` has hidden hidden. Size, list width,
+border colour and blackout are options (§1.5).
 
 The prompt sits at the top (`--layout reverse`). Under it are a short header (`? keys · Sort: recent`) and
 a blank row, then the list. The selected row is highlighted across its full width (`--highlight-line`).
@@ -69,12 +70,34 @@ fzf's match counter is hidden (`--info hidden`).
 
 The popup's outer frame is drawn with heavy lines (`--border bold`, `┏━┓┃┗┛`) in the accent, so the
 picker stands out from the pane it covers. The frame has no label, so it is unbroken on all four sides;
-the tmux status bar already names the current session, and the cursor opens on it. The preview border, the rule under the prompt and the scrollbar stay grey (colour 59, fzf's default), so the
-outer frame is the only accented edge.
+the tmux status bar already names the current session, and the cursor opens on it. The preview border,
+the rule under the prompt and the scrollbar stay grey (colour 59, fzf's default), so the outer frame is
+the only accented edge.
 
 The accent is green `#5fff00`, colour 82 of the 256-colour palette. It is the green of the author's tmux
 status bar. The outer frame, the selection, the header's `?` and the pane rules use it. In the key sheet,
-key names are bright magenta and section titles bright cyan. Colours are fixed in the scripts.
+key names are bright magenta and section titles bright cyan. Apart from the frame (§1.5), colours are
+fixed in the scripts.
+
+### 1.5 Options
+
+`sessionz.sh` reads these from tmux each time the picker opens, in one `display-message` call, so a
+change takes effect on the next open without reloading the plugin.
+
+| Option | Default | Values |
+| --- | --- | --- |
+| `@sessionz-width` | `75%` | Popup width, `1%`–`100%` of the client |
+| `@sessionz-height` | `75%` | Popup height, `1%`–`100%` |
+| `@sessionz-list-width` | `25%` | List column, `1%`–`99%` of the popup; the preview takes the rest |
+| `@sessionz-border-color` | `82` | Frame colour: `0`–`255`, `#rrggbb`, `-1` (terminal default) or an ANSI name such as `bright-green` |
+| `@sessionz-blackout` | `off` | `on` hides everything behind the picker |
+
+The `%` is optional. A malformed value falls back to its default, and one tmux message names every value
+that was ignored, so a typo does not stop the picker opening.
+
+Blackout makes the popup cover the whole client and draws the panel inside an fzf `--margin` of half the
+remaining width and height, so the panel keeps its configured size. The space around it is the
+terminal's background colour; tmux popups have no transparency or dimming to do better.
 
 ## 2. Design
 
@@ -119,7 +142,7 @@ Nothing is written to tmux options, so two pickers on two clients cannot interfe
 | File | Role |
 | --- | --- |
 | `sessionz.tmux` | TPM entry: binds `@sessionz-bind` (default `o`), in the prefix table unless `@sessionz-prefix` is `off` |
-| `scripts/sessionz.sh` | Picker entry; called by `run-shell` with `#{client_tty}` |
+| `scripts/sessionz.sh` | Picker entry; called by `run-shell` with `#{client_tty}`. Reads the options in §1.5 |
 | `scripts/action.sh` | Every key's behaviour |
 | `scripts/list.sh` | `id\tage\tname` lines, `recent` (newest output first) or `alpha`. `SESSIONZ_NOW` overrides the clock for tests |
 | `scripts/preview.sh` | Window list and pane contents (`capture-pane -e`, with history), the key sheet, or a directory listing in zoxide mode. `--window` reports which window is previewed |

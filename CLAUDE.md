@@ -7,8 +7,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 sessionZ, a tmux session picker in an fzf popup, packaged as a TPM plugin.
 
 - `sessionz.tmux` — TPM entry; binds the picker key (`@sessionz-bind`, `@sessionz-prefix`)
-- `scripts/` — the picker: `sessionz.sh` (entry), `action.sh` (every key), `list.sh` (sessions with their
-  age, from `#{window_activity}`), `preview.sh`
+- `scripts/` — the picker: `sessionz.sh` (entry; reads the size, list-width, border-colour and blackout
+  options on every open), `action.sh` (every key), `list.sh` (sessions with their age, from
+  `#{window_activity}`), `preview.sh`
 - `tests/`, `pyproject.toml`, `uv.lock` — pytest suite (run with uv) that drives the real popup
 - `docs/sessionz.md` — design, keys and test harness; superseded notes in `docs/archive/`
 - `journal/` — dated development entries; point-in-time, never retro-edited
