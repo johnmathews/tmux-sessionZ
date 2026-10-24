@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# sessionX: switch, create, rename and kill tmux sessions from an fzf popup.
-# Bind with: bind o run-shell "~/.tmux/sessionx/sessionx.sh '#{client_tty}'"
-# Design, keys and tests: docs/sessionx.md
+# sessionZ: switch, create, rename and kill tmux sessions from an fzf popup.
+# Bound by sessionz.tmux: run-shell "<plugin>/scripts/sessionz.sh '#{client_tty}'"
+# Design, keys and tests: docs/sessionz.md
 set -u
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 client="${1:-}"
 [[ -n "$client" ]] || client=$(tmux display-message -p '#{client_tty}')
 
-state=$(mktemp -d "${TMPDIR:-/tmp}/sessionx.XXXXXX") || exit 0
+state=$(mktemp -d "${TMPDIR:-/tmp}/sessionz.XXXXXX") || exit 0
 trap 'rm -rf "$state"' EXIT
 printf '%s\n' "$client" >"$state/client"
 printf 'sessions\n' >"$state/mode"

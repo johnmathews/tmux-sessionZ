@@ -3,7 +3,7 @@
 # it prints is the list of fzf actions to run next.
 #
 # Usage: action.sh STATE_DIR VERB [KEY] [QUERY]
-#   STATE_DIR  per-picker directory made by sessionx.sh (mode, sort, client, list files)
+#   STATE_DIR  per-picker directory made by sessionz.sh (mode, sort, client, list files)
 #   KEY        field 1 of the focused line: a session id ($27) or d:/path
 #   QUERY      the current query, which is the name being typed in prompt modes
 #

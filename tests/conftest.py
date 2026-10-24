@@ -1,4 +1,4 @@
-"""Harness that drives the sessionX picker through a real tmux popup.
+"""Harness that drives the sessionZ picker through a real tmux popup.
 
 Two private tmux servers per test:
 
@@ -26,27 +26,10 @@ import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 TMUX = shutil.which("tmux") or "tmux"
-ENTRY = (REPO / os.environ.get("SESSIONX_ENTRY", "sessionx/sessionx.sh")).resolve()
-LEGACY = ENTRY.name == "sessionx-wrapper.sh"
-PLUGIN = Path.home() / ".tmux/plugins/tmux-sessionx"
+ENTRY = (REPO / os.environ.get("SESSIONZ_ENTRY", "scripts/sessionz.sh")).resolve()
 
 # Characters that can bound the list column on screen: popup border, preview border.
 _EDGE = re.compile(r"[│┃|╭╮╰╯─]")
-
-
-def _legacy_conf() -> str:
-    """Plugin setup mirroring the live .tmux.conf.local, for runs against the old wrapper."""
-    return "\n".join(
-        [
-            "set -g @sessionx-window-mode off",
-            "set -g @sessionx-tree-mode on",
-            "set -g @sessionx-preview-enabled true",
-            "set -g @sessionx-preview-location right",
-            "set -g @sessionx-preview-ratio 55%",
-            "set -g @sessionx-filter-current false",
-            f"run-shell {PLUGIN}/sessionx.tmux",
-        ]
-    )
 
 
 @dataclass
@@ -240,7 +223,6 @@ def start(tmp: Path, first_session: str = "home", width: int = 200, height: int 
                 "set -g escape-time 0",
                 "set -g status off",
                 "set -g detach-on-destroy on",
-                *([_legacy_conf()] if LEGACY else []),
                 f"bind -n F12 run-shell \"'{ENTRY}' '#{{client_tty}}'\"",
                 "",
             ]

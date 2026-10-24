@@ -5,7 +5,7 @@ from pathlib import Path
 
 from conftest import REPO, Picker, settle
 
-PREVIEW = REPO / "sessionx" / "preview.sh"
+PREVIEW = REPO / "scripts" / "preview.sh"
 BRIGHT = "\x1b[1;38;5;82m"  # bold status-bar green (#5fff00), the pane-label colour
 
 

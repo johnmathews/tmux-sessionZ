@@ -1,7 +1,7 @@
 [project]
-name = "tmux-config"
+name = "tmux-sessionz"
 version = "0.1.0"
-description = "Test suite for the sessionX picker in this tmux configuration"
+description = "sessionZ: a tmux session picker in an fzf popup (test suite)"
 requires-python = ">=3.13"
 dependencies = []
 
