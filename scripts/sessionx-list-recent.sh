@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Output tmux windows in reverse-chronological order (most recently active session first).
+# Output tmux sessions (or windows) in reverse-chronological order.
+# Respects @sessionx-window-mode: 'on' lists windows, 'off' lists sessions only.
 # Used by sessionx-wrapper.sh for reload-sync and position computation.
 #
 # Usage: sessionx-list-recent.sh [--boost SESSION_NAME]
@@ -14,11 +15,24 @@ if [[ "$1" == "--boost" ]]; then
     BOOST="$2"
 fi
 
-if [[ -n "$BOOST" ]]; then
-    tmux list-windows -t "$BOOST" -F "#{session_name}:#{window_index} #{window_name}" 2>/dev/null
-fi
+WINDOW_MODE=$(tmux show-option -gqv @sessionx-window-mode)
 
-tmux list-sessions -F "#{session_activity} #{session_name}" | sort -rn | while read _ts sess; do
-    [[ "$sess" == "$BOOST" ]] && continue
-    tmux list-windows -t "$sess" -F "#{session_name}:#{window_index} #{window_name}"
-done
+if [[ "$WINDOW_MODE" == "on" ]]; then
+    # Window mode: list all windows grouped by session
+    if [[ -n "$BOOST" ]]; then
+        tmux list-windows -t "$BOOST" -F "#{session_name}:#{window_index} #{window_name}" 2>/dev/null
+    fi
+    tmux list-sessions -F "#{session_activity} #{session_name}" | sort -rn | while read _ts sess; do
+        [[ "$sess" == "$BOOST" ]] && continue
+        tmux list-windows -t "$sess" -F "#{session_name}:#{window_index} #{window_name}"
+    done
+else
+    # Session-only mode: list session names
+    if [[ -n "$BOOST" ]]; then
+        echo "$BOOST"
+    fi
+    tmux list-sessions -F "#{session_activity} #{session_name}" | sort -rn | while read _ts sess; do
+        [[ "$sess" == "$BOOST" ]] && continue
+        echo "$sess"
+    done
+fi
