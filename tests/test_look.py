@@ -4,10 +4,11 @@ import re
 
 from conftest import Picker, settle, wait_for
 
-# A magenta background in tmux's re-encoding of the screen: 45, 105, or palette 5/13.
-# fzf's default theme already gives the current line a faint grey background, so
-# any-background is not enough to tell the highlight was added.
-MAGENTA_BG = re.compile(r"\x1b\[(?:[0-9;]*;)?(?:45|105|48;5;(?:5|13))[;m]")
+# The accent is the status bar's green, #5fff00 = 256-colour palette 82. tmux may
+# re-encode it as 48;5;82 or as RGB. fzf's default theme already gives the current
+# line a faint grey background, so any-background is not enough.
+GREEN_BG = re.compile(r"\x1b\[(?:[0-9;]*;)?48;(?:5;82|2;95;255;0)[;m]")
+PINK = re.compile(r"\x1b\[(?:[0-9;]*;)?(?:35|95|45|105|[34]8;5;(?:5|13))[;m]")
 
 
 def _left(line: str) -> str:
@@ -20,7 +21,20 @@ def test_selected_row_has_a_background_colour(picker: Picker) -> None:
     picker.new_session("alpha")
     picker.open()
     selected = [line for line in picker.screen_ansi().splitlines() if "▶" in line]
-    assert selected and MAGENTA_BG.search(selected[0]), selected
+    assert selected and GREEN_BG.search(selected[0]), selected
+
+
+def test_no_pink_anywhere_and_no_coloured_gutter(picker: Picker) -> None:
+    """The accent moved from magenta to green; unselected rows carry no accent background."""
+    for name in ("alpha", "beta"):
+        picker.new_session(name)
+    picker.open()
+    picker.press("?")
+    wait_for(lambda: "kill session" in picker.screen(), what="key sheet")
+    screen = picker.screen_ansi()
+    assert not PINK.search(screen), [line for line in screen.splitlines() if PINK.search(line)][:2]
+    unselected = [line for line in screen.splitlines() if "▶" not in line and ("alpha" in line or "beta" in line)]
+    assert unselected and not any(GREEN_BG.search(line) for line in unselected), unselected
 
 
 def test_no_match_counter(picker: Picker) -> None:

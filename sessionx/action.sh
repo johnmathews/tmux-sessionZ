@@ -27,7 +27,7 @@ tab=$'\t'
 # The header: a pointer to the key sheet and the sort order. Its second line is
 # blank on purpose, to leave a row of space above the list.
 hints() {
-    local order=recent key=$'\033[1;95m' dim=$'\033[2m' reset=$'\033[0m'
+    local order=recent key=$'\033[1;38;5;82m' dim=$'\033[2m' reset=$'\033[0m'
     [[ "$sort" == alpha ]] && order=A-Z
     printf '%s?%s keys  %s·%s  Sort: %s\n ' "$key" "$reset" "$dim" "$reset" "$order"
 }

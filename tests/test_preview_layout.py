@@ -6,7 +6,7 @@ from pathlib import Path
 from conftest import REPO, Picker, settle
 
 PREVIEW = REPO / "sessionx" / "preview.sh"
-BRIGHT = "\x1b[1;95m"  # bold bright magenta, the pane-label colour
+BRIGHT = "\x1b[1;38;5;82m"  # bold status-bar green (#5fff00), the pane-label colour
 
 
 def _preview(picker: Picker, tmp_path: Path, session: str, lines: int, cols: int = 60) -> list[str]:
