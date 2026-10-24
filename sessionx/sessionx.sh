@@ -26,7 +26,7 @@ fzf --tmux center,75%,75% \
     --border rounded --border-label " Current session: \"$current_name\" " \
     --prompt '> ' --pointer '▶' \
     --header "$("$DIR/action.sh" "$state" hints)" \
-    --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window 'right,55%,follow,~2' \
+    --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window 'right,55%,follow,~1' \
     --bind "start:pos(${line:-1})" \
     --bind "enter:transform($act enter {1} {q})" \
     --bind "esc:transform($act esc)" \

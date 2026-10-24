@@ -3,20 +3,21 @@
 > Purpose: how the session picker in `sessionx/` works, why it is built this way, and how to test it.
 > Read this before changing any binding.
 
-**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 36 passed).
+**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 42 passed).
 
 ## 1. What it is
 
 `prefix o` opens an fzf popup listing every tmux session, most recently active first, with the cursor on
-the current session and, on the right, one window of the selected session as it looks right now. Two
-pinned header lines name the session and its window count, then list every window (`index: name`, or the
-running command when unnamed). The previewed window is highlighted and the active one starred. `←`/`→`
+the current session and, on the right, one window of the selected session as it looks right now. A
+pinned header line lists every window (`index: name`, or the running command when unnamed); the
+previewed window is highlighted and the active one starred. `←`/`→`
 (or `ctrl-h`/`ctrl-l`) step through the windows, wrapping at the ends; another session always opens on its
 active window, and `enter` lands on whichever window is previewed. A window with several panes shows them
-stacked in index order, each under a `── pane N: command ──` label and cut to its last lines so that all
-of them fit. Stacking keeps every pane readable at the preview's width; a side-by-side split is therefore
-shown one pane above the other. Each pane is scrolled to its last non-blank line, so the prompt or latest
-output is in view. The prompt sits at the top
+stacked in index order, each under a full-width `── pane N: command ───` rule in bold bright magenta.
+The preview's height is shared by water-filling: a pane short enough to fit is shown in full, and the
+remaining lines go to the longer panes, which reach back into their scrollback to use them. Stacking
+keeps every pane readable at the preview's width; a side-by-side split is therefore shown one pane above
+the other. Each pane ends at its last non-blank line, so the prompt or latest output is in view. The prompt sits at the top
 (`--layout reverse`), so the most recent session is directly under it. It replaced a wrapper around the
 `omerxx/tmux-sessionx` plugin in October 2026. The evaluation that led to the rewrite is summarised in
 `journal/261024-sessionx-rewrite.md`.
@@ -77,7 +78,7 @@ options, so two pickers on two clients cannot interfere.
 | `sessionx/sessionx.sh` | Entry point; called by `run-shell` with `#{client_tty}` |
 | `sessionx/action.sh` | Every key's behaviour |
 | `sessionx/list.sh` | `id\tname` lines, `recent` or `alpha` |
-| `sessionx/preview.sh` | One window of the session (`capture-pane -e`) under the window list, or a directory listing in zoxide mode. `--window` reports which window is previewed |
+| `sessionx/preview.sh` | One window of the session (`capture-pane -e`, with history) under the window list, or a directory listing in zoxide mode. `--window` reports which window is previewed. `tests/test_preview_layout.py` runs it directly to check the line budget |
 
 Binding in `~/.tmux.conf.local`:
 
@@ -90,7 +91,7 @@ Tested with fzf 0.74.5 (`--tmux`, `--with-shell`, `transform`), tmux 3.8 and bas
 ## 3. Tests
 
 ```bash
-uv run pytest            # ~75 s; private tmux servers (-L), never your running one
+uv run pytest            # ~80 s; private tmux servers (-L), never your running one
 ```
 
 Each test starts two private servers (`tmux -L sxt-<random>`). The *inner* one holds the sessions under

@@ -53,5 +53,5 @@ def test_preview_lists_no_other_sessions(tmux_env: Callable[..., Picker]) -> Non
     settle(picker)
     screen = picker.screen()
     counts = {name: screen.count(name) for name in names}
-    # Each name once in the list; the selected one also once in the preview header.
-    assert counts == {name: 2 if name == "n05" else 1 for name in names}, screen
+    # Each name once, in the list; the preview header lists windows, not sessions.
+    assert counts == {name: 1 for name in names}, screen
