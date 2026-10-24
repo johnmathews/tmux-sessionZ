@@ -1,3 +1,5 @@
+**Status:** superseded by [../sessionx.md](../sessionx.md) (2026-10-24). Describes the retired wrapper around tmux-sessionx; kept for the fzf event-ordering findings.
+
 # Cursor positioning in fzf with `reload-sync`
 
 How to reliably set the cursor position when using fzf's `reload-sync` to

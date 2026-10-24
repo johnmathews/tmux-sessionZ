@@ -89,5 +89,6 @@ with `capture-pane`. Helpers live in `tests/conftest.py` (`open`, `select`, `pre
 `client_session`, `attach_another` for a second client).
 
 `SESSIONX_ENTRY=<path>` runs the suite against another entry script. That is how the old wrapper was shown
-to fail every finding-tagged case before the rewrite. `tests/test_shellcheck.py` lints every script beside
+to fail every finding-tagged case before the rewrite: check out `scripts/` from commit `4be4389`, then run
+`SESSIONX_ENTRY=scripts/sessionx-wrapper.sh uv run pytest` (17 failed, 6 passed). `tests/test_shellcheck.py` lints every script beside
 the entry.
