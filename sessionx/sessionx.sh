@@ -26,7 +26,7 @@ fzf --tmux center,75%,75% \
     --border rounded --border-label " Current session: \"$current_name\" " \
     --prompt '> ' --pointer '▶' \
     --header "$("$DIR/action.sh" "$state" hints)" \
-    --preview "$(printf %q "$DIR/preview.sh") {1}" --preview-window 'right,55%,follow,~1' \
+    --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window 'right,55%,follow,~2' \
     --bind "start:pos(${line:-1})" \
     --bind "enter:transform($act enter {1} {q})" \
     --bind "esc:transform($act esc)" \
@@ -38,6 +38,8 @@ fzf --tmux center,75%,75% \
     --bind "?:transform($act '?')" \
     --bind "ctrl-u:transform($act ctrl-u)" \
     --bind "ctrl-d:transform($act ctrl-d)" \
+    --bind "right:transform($act win-next {1})" \
+    --bind "left:transform($act win-prev {1})" \
     <"$state/list" >/dev/null
 
 # run-shell reports a non-zero exit in the pane; aborting the picker is not an error.

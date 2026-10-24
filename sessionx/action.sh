@@ -186,6 +186,24 @@ zoxide)
     esac
     ;;
 
+# Left/right: move the text cursor in a prompt or zoxide mode; otherwise cycle the
+# preview through the focused session's windows, wrapping at either end.
+win-next | win-prev)
+    if prompting || [[ "$mode" == zoxide ]]; then
+        if [[ "$verb" == win-next ]]; then printf 'forward-char'; else printf 'backward-char'; fi
+        exit 0
+    fi
+    [[ "$key" == \$* ]] || exit 0
+    step=1
+    [[ "$verb" == win-prev ]] && step=-1
+    current=$("$DIR/preview.sh" "$state" --window "$key")
+    next=$(tmux list-windows -t "$key" -F '#{window_id}' | awk -v cur="$current" -v step="$step" '
+        { w[NR] = $0; if ($0 == cur) i = NR }
+        END { j = i + step; if (j < 1) j = NR; if (j > NR) j = 1; print w[j] }')
+    printf '%s\t%s\n' "$key" "$next" >"$state/window"
+    printf 'refresh-preview'
+    ;;
+
 # Keys that type text in a prompt mode and drive the preview otherwise.
 '?')
     if prompting; then printf 'put(?)'; else printf 'toggle-preview'; fi

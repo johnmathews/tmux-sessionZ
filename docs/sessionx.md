@@ -3,14 +3,16 @@
 > Purpose: how the session picker in `sessionx/` works, why it is built this way, and how to test it.
 > Read this before changing any binding.
 
-**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 26 passed).
+**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 31 passed).
 
 ## 1. What it is
 
 `prefix o` opens an fzf popup listing every tmux session, most recently active first, with the cursor on
-the current session and, on the right, the selected session's active pane as it looks right now. A
-pinned header names the session, its active window and its window count. The pane is scrolled to its
-last non-blank line, so the prompt or latest output is in view. The prompt sits at the top
+the current session and, on the right, one window of the selected session as it looks right now. Two
+pinned header lines name the session and its window count, then list every window (`index: name`, or the
+running command when unnamed). The previewed window is highlighted and the active one starred. `←`/`→`
+step through the windows, wrapping at the ends; another session always opens on its active window. The
+pane is scrolled to its last non-blank line, so the prompt or latest output is in view. The prompt sits at the top
 (`--layout reverse`), so the most recent session is directly under it. It replaced a wrapper around the
 `omerxx/tmux-sessionx` plugin in October 2026. The evaluation that led to the rewrite is summarised in
 `journal/261024-sessionx-rewrite.md`.
@@ -24,6 +26,7 @@ last non-blank line, so the prompt or latest output is in view. The prompt sits 
 | `ctrl-q` | Kill the selected session. Clients on it move to the most recent other session first; the last session cannot be killed |
 | `ctrl-t` | Toggle sort: recent ↔ A-Z |
 | `ctrl-f` | Toggle the list to zoxide directories; `enter` on one switches to the session named after the directory, or creates it there |
+| `←` / `→` | Preview the previous / next window of the selected session (in a prompt or zoxide mode: move the text cursor) |
 | `?` | Toggle the preview (in a prompt mode: types `?`) |
 | `ctrl-u` / `ctrl-d` | Scroll the preview (in a prompt mode: clear line / delete char) |
 
@@ -70,7 +73,7 @@ options, so two pickers on two clients cannot interfere.
 | `sessionx/sessionx.sh` | Entry point; called by `run-shell` with `#{client_tty}` |
 | `sessionx/action.sh` | Every key's behaviour |
 | `sessionx/list.sh` | `id\tname` lines, `recent` or `alpha` |
-| `sessionx/preview.sh` | Active pane of the session (`capture-pane -e`), or a directory listing in zoxide mode |
+| `sessionx/preview.sh` | One window of the session (`capture-pane -e`) under the window list, or a directory listing in zoxide mode. `--window` reports which window is previewed |
 
 Binding in `~/.tmux.conf.local`:
 
@@ -83,7 +86,7 @@ Tested with fzf 0.74.5 (`--tmux`, `--with-shell`, `transform`), tmux 3.8 and bas
 ## 3. Tests
 
 ```bash
-uv run pytest            # ~50 s; private tmux servers (-L), never your running one
+uv run pytest            # ~65 s; private tmux servers (-L), never your running one
 ```
 
 Each test starts two private servers (`tmux -L sxt-<random>`). The *inner* one holds the sessions under
