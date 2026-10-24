@@ -27,7 +27,7 @@ fzf --tmux center,75%,75% \
     --ansi --info hidden --highlight-line --gutter ' ' \
     --color 'border:82,preview-border:59,separator:59,scrollbar:59,bg+:82,fg+:black:bold,hl+:black:bold:underline,pointer:black,gutter:-1' \
     --header "$("$DIR/action.sh" "$state" hints)" \
-    --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window 'right,55%,follow,~1' \
+    --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window 'right,75%,follow,~1' \
     --bind "start:pos(${line:-1})" \
     --bind "enter:transform($act enter {1} {q})" \
     --bind "esc:transform($act esc)" \

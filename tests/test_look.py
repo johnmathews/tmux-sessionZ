@@ -39,6 +39,13 @@ def test_popup_border_is_bold_and_green(picker: Picker) -> None:
     assert not GREEN_FG.search(_fg_before(rule, "──")), rule
 
 
+def test_list_takes_a_quarter_of_the_width(picker: Picker) -> None:
+    """Session names are short, so the list gets about 25% and the preview about 75%."""
+    picker.open()
+    share = picker.list_share()
+    assert share is not None and 0.2 <= share <= 0.3, share
+
+
 def _fg_before(line: str, glyph: str) -> str:
     """The last foreground colour set before `glyph`, as an escape: the colour the glyph is drawn in."""
     fg = ""

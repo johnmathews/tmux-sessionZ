@@ -3,7 +3,7 @@
 > Purpose: how sessionZ works, why it is built this way, and how to test it. Read this before changing
 > any binding.
 
-**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 71 passed).
+**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 74 passed).
 
 ## 1. What it is
 
@@ -56,6 +56,11 @@ down the list in order. A program that keeps redrawing (a clock, a spinner, `hto
 a few seconds old. Search matches names only (`--nth 2`), never ages.
 
 ### 1.4 Look
+
+The list takes a quarter of the popup's width and the preview the rest (`--preview-window right,75%`):
+session names are short and the preview is what is read. Zoxide mode widens the list to 45%
+(`change-preview-window(55%)`) because paths are long, and leaving it restores 75%. Both keep a preview
+that `alt-p` has hidden hidden.
 
 The prompt sits at the top (`--layout reverse`). Under it are a short header (`? keys · Sort: recent`) and
 a blank row, then the list. The selected row is highlighted across its full width (`--highlight-line`).
