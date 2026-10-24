@@ -3,7 +3,7 @@
 > Purpose: how sessionZ works, why it is built this way, and how to test it. Read this before changing
 > any binding.
 
-**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 70 passed).
+**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 71 passed).
 
 ## 1. What it is
 
@@ -62,9 +62,14 @@ a blank row, then the list. The selected row is highlighted across its full widt
 The gutter is blank (`--gutter ' '`, `gutter:-1`); fzf otherwise draws a `▌` beside every unselected row.
 fzf's match counter is hidden (`--info hidden`).
 
+The popup's outer frame is drawn with heavy lines (`--border bold`, `┏━┓┃┗┛`) in the accent, so the
+picker stands out from the pane it covers. The current session's name sits in the frame's label. The
+preview border, the rule under the prompt and the scrollbar stay grey (colour 59, fzf's default), so the
+outer frame is the only accented edge.
+
 The accent is green `#5fff00`, colour 82 of the 256-colour palette. It is the green of the author's tmux
-status bar. The selection, the header's `?` and the pane rules use it. In the key sheet, key names are
-bright magenta and section titles bright cyan. Colours are fixed in the scripts.
+status bar. The outer frame, the selection, the header's `?` and the pane rules use it. In the key sheet,
+key names are bright magenta and section titles bright cyan. Colours are fixed in the scripts.
 
 ## 2. Design
 
