@@ -15,7 +15,6 @@ printf 'recent\n' >"$state/sort"
 "$DIR/list.sh" recent >"$state/list"
 
 current=$(tmux display-message -p -c "$client" '#{session_id}')
-current_name=$(tmux display-message -p -c "$client" '#{session_name}')
 line=$(awk -F'\t' -v id="$current" '$1 == id { print NR; exit }' "$state/list")
 act="$(printf %q "$DIR/action.sh") $(printf %q "$state")"
 
@@ -23,12 +22,12 @@ fzf --tmux center,75%,75% \
     --with-shell 'bash -c' \
     --layout reverse --sync \
     --delimiter '\t' --with-nth '2..' --nth 2 \
-    --border bold --border-label " Current session: \"$current_name\" " \
+    --border bold \
     --prompt '> ' --pointer '▶' \
     --ansi --info hidden --highlight-line --gutter ' ' \
     --color 'border:82,preview-border:59,separator:59,scrollbar:59,bg+:82,fg+:black:bold,hl+:black:bold:underline,pointer:black,gutter:-1' \
     --header "$("$DIR/action.sh" "$state" hints)" \
-    --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window 'right,55%,follow,~1' \
+    --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window 'right,75%,follow,~1' \
     --bind "start:pos(${line:-1})" \
     --bind "enter:transform($act enter {1} {q})" \
     --bind "esc:transform($act esc)" \

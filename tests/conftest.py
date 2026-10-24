@@ -135,7 +135,17 @@ class Picker:
         return None
 
     def is_open(self) -> bool:
-        return "Current session" in self.screen()
+        # The popup's top-left corner: only the picker's bold frame draws it.
+        return "┏" in self.screen()
+
+    def list_share(self) -> float | None:
+        """Fraction of the popup's width left of the preview, or None while the preview is hidden."""
+        lines = self.screen().splitlines()
+        top = next(line for line in lines if "┏" in line)
+        preview_top = next((line for line in lines if "╭" in line), None)
+        if preview_top is None:
+            return None
+        return (preview_top.index("╭") - top.index("┏")) / (top.index("┓") - top.index("┏") + 1)
 
     # --- input --------------------------------------------------------------
 

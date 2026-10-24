@@ -54,6 +54,15 @@ first_line() { head -n 1 <<<"$1"; }
 # New detached session named $1 in directory $2; prints its id, or the error on failure.
 create_session() { tmux new-session -d -s "$1" -c "$2" -P -F '#{session_id}' 2>&1; }
 
+# A change-preview-window spec: size $1, or sessionz.sh's own when empty (unset options are inherited).
+# change-preview-window shows a hidden preview, so keep it hidden if alt-p closed it: fzf exports no
+# preview size to child processes while the preview is hidden.
+preview_spec() {
+    local spec="${1:-}"
+    [[ -n "${FZF_PREVIEW_COLUMNS:-}" && "$FZF_PREVIEW_COLUMNS" != 0 ]] || spec="${spec:+$spec,}hidden"
+    printf '%s' "$spec"
+}
+
 # Leave a prompt or zoxide mode: back to the session list, cursor on session $1.
 # reload-sync blocks until the list (and the cleared query) is applied, so the
 # pos() that follows lands on the reloaded list rather than being overwritten.
@@ -62,7 +71,9 @@ to_sessions() {
     set_mode sessions
     refresh
     [[ -n "$focus" ]] && line=$(line_of "$focus")
-    printf 'change-prompt(> )+enable-search+clear-query+reload-sync(cat %q)' "$list"
+    # Back to sessionz.sh's --preview-window width (zoxide mode widens the list).
+    printf 'change-preview-window(%s)+change-prompt(> )+enable-search+clear-query+reload-sync(cat %q)' \
+        "$(preview_spec)" "$list"
     [[ -n "$line" ]] && printf '+pos(%s)' "$line"
     printf '+change-header:%s' "${2:-$(hints)}"
 }
@@ -194,7 +205,10 @@ zoxide)
         # Same three fields as a session line; the blank age keeps paths aligned with names.
         zoxide query -l | awk -v t="$tab" '{ print "d:" $0 t "    " t $0 }' >"$state/dirs"
         set_mode zoxide
-        printf 'change-prompt(zoxide> )+clear-query+reload-sync(cat %q)+change-header:enter open · ^f/esc back' "$state/dirs"
+        # Paths are longer than session names: widen the list while they are shown.
+        printf 'change-preview-window(%s)+change-prompt(zoxide> )+clear-query+reload-sync(cat %q)' \
+            "$(preview_spec 55%)" "$state/dirs"
+        printf '+change-header:enter open · ^f/esc back'
         ;;
     zoxide) to_sessions "" ;;
     esac

@@ -36,3 +36,28 @@ def test_directory_opens_a_session_rooted_there(picker: Picker, short_dir: Path,
         for line in picker.inner.run("list-sessions", "-F", "#{session_name}\t#{session_path}").splitlines()
     )
     assert Path(paths[dirname]).resolve() == target
+
+
+def test_directory_list_is_wider_than_the_session_list(picker: Picker, short_dir: Path) -> None:
+    """Paths are longer than session names: zoxide mode gives the list 45%, leaving it gives back 25%."""
+    subprocess.run(["zoxide", "add", str(short_dir)], env=picker.inner.env, check=True)
+    picker.open()
+    picker.press("C-f")
+    wait_for(lambda: "zoxide>" in picker.screen(), what="zoxide mode")
+    wait_for(lambda: 0.4 <= (picker.list_share() or 0) <= 0.5, what="the list to widen")
+    picker.press("Escape")
+    wait_for(lambda: "zoxide>" not in picker.screen(), what="session mode")
+    wait_for(lambda: 0.2 <= (picker.list_share() or 0) <= 0.3, what="the list to narrow")
+
+
+def test_zoxide_mode_keeps_a_hidden_preview_hidden(picker: Picker, short_dir: Path) -> None:
+    subprocess.run(["zoxide", "add", str(short_dir)], env=picker.inner.env, check=True)
+    picker.open()
+    picker.press("M-p")
+    wait_for(lambda: picker.list_share() is None, what="preview hidden")
+    picker.press("C-f")
+    wait_for(lambda: "zoxide>" in picker.screen(), what="zoxide mode")
+    assert picker.list_share() is None
+    picker.press("Escape")
+    wait_for(lambda: "zoxide>" not in picker.screen(), what="session mode")
+    assert picker.list_share() is None

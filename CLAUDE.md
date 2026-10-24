@@ -59,3 +59,6 @@ Verified on fzf 0.74.5 / tmux 3.8. Older measurements: `docs/archive/fzf-cursor-
 - After `execute(...)`, fzf's redraw overrides chained `pos()`/`last`. This is why prompts live inside fzf.
 - `capture-pane` trims trailing spaces, so match `New session:`, not `New session: `.
 - Root-table tmux bindings (e.g. `bind -n C-l`) do not fire while the popup is open; keys reach fzf.
+- `change-preview-window(...)` inherits unset options from `--preview-window`, and shows a hidden preview
+  unless the spec says `hidden`. A `transform` child sees no preview size (`FZF_PREVIEW_COLUMNS`) while
+  the preview is hidden, which is how `action.sh` keeps it hidden.

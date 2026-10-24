@@ -22,20 +22,28 @@ def test_popup_border_is_bold_and_green(picker: Picker) -> None:
     """The popup's outline uses heavy box lines in the accent, so it stands out from the pane under it."""
     picker.open()
     lines = picker.screen_ansi().splitlines()
-    top = next(line for line in lines if "Current session" in line)
+    top = next(line for line in lines if "┏" in line or "╭" in line)
     bottom = next(line for line in reversed(lines) if "┗" in line or "╰" in line)
     sides = [line for line in lines if "> " in line or "▶" in line]
     plain = [re.sub(r"\x1b\[[0-9;]*m", "", line) for line in (top, bottom, *sides)]
-    assert "┏" in plain[0] and "┓" in plain[0], plain[0]
-    assert "┗" in plain[1] and "┛" in plain[1], plain[1]
+    # No label: the top edge is one unbroken line, like the bottom.
+    assert re.fullmatch(r"\s*┏━+┓\s*", plain[0]), plain[0]
+    assert re.fullmatch(r"\s*┗━+┛\s*", plain[1]), plain[1]
     assert all(line.lstrip().startswith("┃") for line in plain[2:]), plain[2:]
-    for line, corner in ((top, "┏"), (bottom, "┗")):
-        assert GREEN_FG.search(line[: line.index(corner)]), line
+    for line, corner in ((top, "┏"), (top, "┓"), (bottom, "┗"), (bottom, "┛")):
+        assert GREEN_FG.search(_fg_before(line, corner)), line
     # Only the outer frame carries the accent: the preview border and the prompt rule stay grey.
     preview_top = next(line for line in lines if "╭" in line)
     assert not GREEN_FG.search(_fg_before(preview_top, "╭")), preview_top
     rule = next(line for line in lines if "┃ ──" in re.sub(r"\x1b\[[0-9;]*m", "", line))
     assert not GREEN_FG.search(_fg_before(rule, "──")), rule
+
+
+def test_list_takes_a_quarter_of_the_width(picker: Picker) -> None:
+    """Session names are short, so the list gets about 25% and the preview about 75%."""
+    picker.open()
+    share = picker.list_share()
+    assert share is not None and 0.2 <= share <= 0.3, share
 
 
 def _fg_before(line: str, glyph: str) -> str:
