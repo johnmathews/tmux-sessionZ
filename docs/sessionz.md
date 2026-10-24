@@ -3,12 +3,12 @@
 > Purpose: how sessionZ works, why it is built this way, and how to test it. Read this before changing
 > any binding.
 
-**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 55 passed).
+**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 70 passed).
 
 ## 1. What it is
 
-The picker key (`prefix o` by default) opens an fzf popup listing every tmux session, most recently active
-first, with the cursor on the current session. sessionZ began in October 2026 as a rewrite of a local
+The picker key (`prefix o` by default) opens an fzf popup listing every tmux session, the one with the
+most recent output first, with the cursor on the current session. sessionZ began in October 2026 as a rewrite of a local
 wrapper around [`omerxx/tmux-sessionx`](https://github.com/omerxx/tmux-sessionx). It shares that
 plugin's idea and none of its code. The evaluation that led to the rewrite is in
 `journal/261024-sessionx-rewrite.md`.
@@ -22,7 +22,7 @@ plugin's idea and none of its code. The evaluation that led to the rewrite is in
 | `ctrl-r` | Rename the selected session; the prompt starts from its full name. An empty name cancels |
 | `ctrl-a` | New session (stays in the picker, cursor on it). An empty name cancels |
 | `ctrl-q` | Kill the selected session. Clients on it move to the most recent other session first; the last session cannot be killed |
-| `ctrl-t` | Toggle sort: recent ↔ A-Z |
+| `ctrl-t` | Toggle sort: most recent output ↔ A-Z |
 | `ctrl-f` | Toggle the list to zoxide directories; `enter` on one switches to the session named after the directory, or creates it there |
 | `←` / `→`, `ctrl-h` / `ctrl-l` | Preview the previous / next window of the selected session (in a prompt or zoxide mode: move the text cursor) |
 | `?` | Show / hide the key sheet in the preview pane, in two columns when it is wide enough (in a prompt mode: types `?`) |
@@ -45,7 +45,17 @@ a pane short enough to fit is shown in full, and the remaining lines go to the l
 back into their scrollback to use them. Each pane ends at its last non-blank line, so the prompt or latest
 output is in view.
 
-### 1.3 Look
+### 1.3 The age column
+
+Left of each name is the time since the session last printed anything, in any of its windows: `30s`,
+`5m`, `2hr`, `30hr`, `3d`. Hours run to 48 before switching to days. The value is the newest
+`#{window_activity}` among the session's windows, which tmux updates whenever a pane writes output.
+`#{session_activity}` is not used, because it only changes when a client attaches or types; it cannot show
+that a detached session just finished something. The "recent" sort uses the same value, so the ages run
+down the list in order. A program that keeps redrawing (a clock, a spinner, `htop`) keeps its session at
+a few seconds old. Search matches names only (`--nth 2`), never ages.
+
+### 1.4 Look
 
 The prompt sits at the top (`--layout reverse`). Under it are a short header (`? keys · Sort: recent`) and
 a blank row, then the list. The selected row is highlighted across its full width (`--highlight-line`).
@@ -60,8 +70,9 @@ bright magenta and section titles bright cyan. Colours are fixed in the scripts.
 
 ### 2.1 Identity is the tmux id
 
-Every list line is `<key>\t<display>`: `$27\tdot-files X` for a session, `d:/path\t/path` for a directory.
-fzf shows only field 2 (`--with-nth 2`), and every action receives field 1. Actions call
+Every list line is `<key>\t<age>\t<display>`: `$27\t 2hr\tdot-files X` for a session,
+`d:/path\t    \t/path` for a directory. fzf shows fields 2 onwards (`--with-nth '2..'`) and searches only
+the display (`--nth 2`, counted within the shown fields). Every action receives field 1. Actions call
 `tmux -t '$27'`, which is exact. Names never become targets, so spaces, shared prefixes
 (`server X` / `server - nwip`) and regex characters cannot pick the wrong session. The old wrapper used
 names and fzf's `{1}`, which is the first *word* of the line. It killed `dot-files` when `dot-files X` was
@@ -100,7 +111,7 @@ Nothing is written to tmux options, so two pickers on two clients cannot interfe
 | `sessionz.tmux` | TPM entry: binds `@sessionz-bind` (default `o`), in the prefix table unless `@sessionz-prefix` is `off` |
 | `scripts/sessionz.sh` | Picker entry; called by `run-shell` with `#{client_tty}` |
 | `scripts/action.sh` | Every key's behaviour |
-| `scripts/list.sh` | `id\tname` lines, `recent` or `alpha` |
+| `scripts/list.sh` | `id\tage\tname` lines, `recent` (newest output first) or `alpha`. `SESSIONZ_NOW` overrides the clock for tests |
 | `scripts/preview.sh` | Window list and pane contents (`capture-pane -e`, with history), the key sheet, or a directory listing in zoxide mode. `--window` reports which window is previewed |
 
 Tested with fzf 0.74.5 (`--tmux`, `--with-shell`, `transform`, `--gutter`), tmux 3.8 and bash 5. zoxide is

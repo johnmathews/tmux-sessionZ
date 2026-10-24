@@ -7,7 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 sessionZ, a tmux session picker in an fzf popup, packaged as a TPM plugin.
 
 - `sessionz.tmux` — TPM entry; binds the picker key (`@sessionz-bind`, `@sessionz-prefix`)
-- `scripts/` — the picker: `sessionz.sh` (entry), `action.sh` (every key), `list.sh`, `preview.sh`
+- `scripts/` — the picker: `sessionz.sh` (entry), `action.sh` (every key), `list.sh` (sessions with their
+  age, from `#{window_activity}`), `preview.sh`
 - `tests/`, `pyproject.toml`, `uv.lock` — pytest suite (run with uv) that drives the real popup
 - `docs/sessionz.md` — design, keys and test harness; superseded notes in `docs/archive/`
 - `journal/` — dated development entries; point-in-time, never retro-edited
@@ -17,8 +18,8 @@ sessionZ, a tmux session picker in an fzf popup, packaged as a TPM plugin.
 
 Full design: `docs/sessionz.md`. Read it before changing a binding.
 
-- **Target by id, never by name.** List lines are `<session_id>\t<name>`. fzf shows field 2 and actions
-  receive field 1, so tmux gets `-t '$27'`. Names with spaces, shared prefixes or regex characters must
+- **Target by id, never by name.** List lines are `<session_id>\t<age>\t<name>`. fzf shows fields 2..,
+  searches field 3 only, and actions receive field 1, so tmux gets `-t '$27'`. Names with spaces, shared prefixes or regex characters must
   never reach a `-t`.
 - **One input stream.** `sessionz.sh` writes the list to a file and fzf reads only that. Cursor moves use
   `reload-sync(cat <file>)+pos(N)` with N computed from the same file. Never use `--listen`/`curl` or

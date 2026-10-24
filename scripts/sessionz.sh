@@ -22,7 +22,7 @@ act="$(printf %q "$DIR/action.sh") $(printf %q "$state")"
 fzf --tmux center,75%,75% \
     --with-shell 'bash -c' \
     --layout reverse --sync \
-    --delimiter '\t' --with-nth 2 \
+    --delimiter '\t' --with-nth '2..' --nth 2 \
     --border rounded --border-label " Current session: \"$current_name\" " \
     --prompt '> ' --pointer '▶' \
     --ansi --info hidden --highlight-line --gutter ' ' \
