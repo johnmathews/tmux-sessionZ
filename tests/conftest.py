@@ -30,6 +30,13 @@ ENTRY = (REPO / os.environ.get("SESSIONZ_ENTRY", "scripts/sessionz.sh")).resolve
 
 # Characters that can bound the list column on screen: popup border, preview border.
 _EDGE = re.compile(r"[│┃|╭╮╰╯─]")
+# The age column in front of each session name: 30s, 5m, 2hr, 30hr, 3d.
+AGE = re.compile(r"^\s*\d+(?:s|m|hr|d)\s+")
+
+
+def strip_age(text: str) -> str:
+    """A list row's display text without its leading age column."""
+    return AGE.sub("", text, count=1).strip()
 
 
 @dataclass
@@ -124,7 +131,7 @@ class Picker:
         for line in self.screen().splitlines():
             if "▶ " in line:
                 text = line.split("▶ ", 1)[1]
-                return _EDGE.split(text, 1)[0].rstrip()
+                return strip_age(_EDGE.split(text, 1)[0])
         return None
 
     def is_open(self) -> bool:

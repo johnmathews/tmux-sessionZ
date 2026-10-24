@@ -2,7 +2,7 @@
 
 import re
 
-from conftest import Picker, settle, wait_for
+from conftest import Picker, settle, strip_age, wait_for
 
 # The accent is the status bar's green, #5fff00 = 256-colour palette 82. tmux may
 # re-encode it as 48;5;82 or as RGB. fzf's default theme already gives the current
@@ -58,7 +58,7 @@ def test_blank_row_above_the_list(picker: Picker) -> None:
     picker.open()
     lines = picker.screen().splitlines()
     names = {"alpha", "beta", "home"}
-    first = min(i for i, line in enumerate(lines) if _left(line).lstrip("▶▌ ") in names)
+    first = min(i for i, line in enumerate(lines) if strip_age(_left(line).lstrip("▶▌ ")) in names)
     assert _left(lines[first - 1]) == "", lines[first - 1]
 
 

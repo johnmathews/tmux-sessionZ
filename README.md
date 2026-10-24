@@ -7,6 +7,8 @@ every window and pane of a session before you jump to it.
   `dot-files X` can never touch `dot-files`.
 - **The preview is live.** It shows the selected session's windows. `←`/`→` step through them, a window
   with several panes shows every pane, and `enter` lands on the window you are looking at.
+- **You can see how stale each session is.** Left of each name is the time since the session last
+  printed anything (`30s`, `5m`, `2hr`, `3d`), and the list is sorted by it.
 - **Errors show up.** A failed tmux action shows its error in the picker. Killing the session you are on
   moves you to another one first, instead of detaching you.
 - **Keys are one `?` away.** `?` opens a key sheet in the preview pane.
@@ -40,7 +42,7 @@ set -g @sessionz-prefix 'on'     # 'off' binds the key without the prefix
 | `ctrl-r` | Rename (the prompt starts from the full current name; empty cancels) |
 | `ctrl-a` | New session; the picker stays open on it. Empty name cancels |
 | `ctrl-q` | Kill session. Clients on it move to the most recent other session; the last session is refused |
-| `ctrl-t` | Toggle sort: recent ↔ A-Z |
+| `ctrl-t` | Toggle sort: most recent output ↔ A-Z |
 | `ctrl-f` | Toggle to zoxide directories; `enter` switches to the session named after the directory, or creates it there |
 | `←` / `→`, `ctrl-h` / `ctrl-l` | Preview the previous / next window of the selected session |
 | `?` | Show / hide the key sheet |

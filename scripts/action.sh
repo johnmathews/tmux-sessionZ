@@ -191,7 +191,8 @@ zoxide)
     case "$mode" in
     sessions)
         command -v zoxide >/dev/null || fail "zoxide is not installed"
-        zoxide query -l | awk -v t="$tab" '{ print "d:" $0 t $0 }' >"$state/dirs"
+        # Same three fields as a session line; the blank age keeps paths aligned with names.
+        zoxide query -l | awk -v t="$tab" '{ print "d:" $0 t "    " t $0 }' >"$state/dirs"
         set_mode zoxide
         printf 'change-prompt(zoxide> )+clear-query+reload-sync(cat %q)+change-header:enter open · ^f/esc back' "$state/dirs"
         ;;
