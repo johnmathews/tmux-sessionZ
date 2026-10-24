@@ -3,7 +3,7 @@
 > Purpose: how sessionZ works, why it is built this way, and how to test it. Read this before changing
 > any binding.
 
-**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 83 passed).
+**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 84 passed).
 
 ## 1. What it is
 
@@ -72,7 +72,8 @@ The popup's outer frame is drawn with heavy lines (`--border bold`, `┏━┓�
 picker stands out from the pane it covers. The frame has no label, so it is unbroken on all four sides;
 the tmux status bar already names the current session, and the cursor opens on it. The preview border,
 the rule under the prompt and the scrollbar stay grey (colour 59, fzf's default), so the outer frame is
-the only accented edge.
+the only accented edge. `--padding 1` keeps a blank row and column between the frame and the content
+on every side.
 
 The accent is green `#5fff00`, colour 82 of the 256-colour palette. It is the green of the author's tmux
 status bar. The outer frame, the selection, the header's `?` and the pane rules use it. In the key sheet,

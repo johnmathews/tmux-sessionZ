@@ -63,7 +63,7 @@ fzf "${popup[@]}" \
     --with-shell 'bash -c' \
     --layout reverse --sync \
     --delimiter '\t' --with-nth '2..' --nth 2 \
-    --border bold \
+    --border bold --padding 1 \
     --prompt '> ' --pointer '▶' \
     --ansi --info hidden --highlight-line --gutter ' ' \
     --color "border:$border,preview-border:59,separator:59,scrollbar:59,bg+:82,fg+:black:bold,hl+:black:bold:underline,pointer:black,gutter:-1" \

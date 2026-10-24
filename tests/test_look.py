@@ -35,8 +35,27 @@ def test_popup_border_is_bold_and_green(picker: Picker) -> None:
     # Only the outer frame carries the accent: the preview border and the prompt rule stay grey.
     preview_top = next(line for line in lines if "╭" in line)
     assert not GREEN_FG.search(_fg_before(preview_top, "╭")), preview_top
-    rule = next(line for line in lines if "┃ ──" in re.sub(r"\x1b\[[0-9;]*m", "", line))
+    rule = next(line for line in lines if re.search(r"┃ +──", re.sub(r"\x1b\[[0-9;]*m", "", line)))
     assert not GREEN_FG.search(_fg_before(rule, "──")), rule
+
+
+def test_blank_space_inside_the_frame(picker: Picker) -> None:
+    """A blank row under the top edge and above the bottom one, and blank columns inside both sides.
+
+    fzf already leaves one space beside each side of the frame; the padding adds one more.
+    """
+    picker.new_session("alpha")
+    picker.open()
+    lines = picker.screen().splitlines()
+    top = next(i for i, line in enumerate(lines) if "┏" in line)
+    bottom = next(i for i, line in enumerate(lines) if "┗" in line)
+    left = lines[top].index("┏")
+    right = lines[top].index("┓")
+    inner = [line[left : right + 1] for line in lines[top + 1 : bottom]]
+    assert re.fullmatch(r"┃ +┃", inner[0]), inner[0]
+    assert re.fullmatch(r"┃ +┃", inner[-1]), inner[-1]
+    for row in inner:
+        assert row.startswith("┃  ") and row.endswith("  ┃"), row
 
 
 def test_list_takes_a_quarter_of_the_width(picker: Picker) -> None:
