@@ -1,0 +1,27 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    # Homebrew provides current tmux (>= 3.3 for fzf's --tmux popup) and fzf;
+    # Ubuntu's packaged fzf is too old for --tmux/--gutter.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install tmux, fzf, zoxide, shellcheck, bash
+        run: brew install tmux fzf zoxide shellcheck bash
+      - name: Versions
+        run: |
+          tmux -V
+          fzf --version
+          bash --version | head -1
+      - uses: astral-sh/setup-uv@v10
+      - name: Lint tests
+        run: uv run ruff check tests && uv run ruff format --check tests
+      - name: Test
+        run: uv run pytest
