@@ -135,8 +135,10 @@ class Picker:
         return None
 
     def is_open(self) -> bool:
-        # The popup's top-left corner: only the picker's bold frame draws it.
-        return "┏" in self.screen()
+        # The popup's top-left corner, which only the picker's bold frame draws, or, with the frame
+        # turned off, the list's pointer. A frameless popup with no matching row therefore reads as closed.
+        screen = self.screen()
+        return "┏" in screen or "▶ " in screen
 
     def list_share(self) -> float | None:
         """Fraction of the popup's width left of the preview, or None while the preview is hidden."""

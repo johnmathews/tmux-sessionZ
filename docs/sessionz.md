@@ -3,7 +3,7 @@
 > Purpose: how sessionZ works, why it is built this way, and how to test it. Read this before changing
 > any binding.
 
-**Status:** active. **Last updated:** 2026-10-24. **Last verified:** 2026-10-24 (`uv run pytest`, 84 passed).
+**Status:** active. **Last updated:** 2026-10-25. **Last verified:** 2026-10-25 (`uv run pytest`, 85 passed).
 
 ## 1. What it is
 
@@ -61,19 +61,24 @@ By default the list takes a quarter of the popup's width and the preview the res
 (`--preview-window right,75%`): session names are short and the preview is what is read. Zoxide mode
 widens the list to at least 45% (`change-preview-window(55%)`) because paths are long, and leaving it
 restores the configured width. Both keep a preview that `alt-p` has hidden hidden. Size, list width,
-border colour and blackout are options (§1.5).
+the frame, its colour and blackout are options (§1.5).
 
 The prompt sits at the top (`--layout reverse`). Under it are a short header (`? keys · Sort: recent`) and
 a blank row, then the list. The selected row is highlighted across its full width (`--highlight-line`).
 The gutter is blank (`--gutter ' '`, `gutter:-1`); fzf otherwise draws a `▌` beside every unselected row.
 fzf's match counter is hidden (`--info hidden`).
 
-The popup's outer frame is drawn with heavy lines (`--border bold`, `┏━┓┃┗┛`) in the accent, so the
+By default the popup's outer frame is drawn with heavy lines (`--border bold`, `┏━┓┃┗┛`) in the accent, so the
 picker stands out from the pane it covers. The frame has no label, so it is unbroken on all four sides;
 the tmux status bar already names the current session, and the cursor opens on it. The preview border,
 the rule under the prompt and the scrollbar stay grey (colour 59, fzf's default), so the outer frame is
 the only accented edge. `--padding 1` keeps a blank row and column between the frame and the content
 on every side.
+
+`@sessionz-border off` drops the frame (`--border none`). fzf draws the frame itself and `fzf --tmux`
+opens the popup without a tmux border, so nothing else outlines the popup. The padding stays, so the
+content still sits one cell in from the popup's edge; the space fzf keeps beside a side border goes with
+the border. The preview keeps its own grey border.
 
 The accent is green `#5fff00`, colour 82 of the 256-colour palette. It is the green of the author's tmux
 status bar. The outer frame, the selection, the header's `?` and the pane rules use it. In the key sheet,
@@ -90,7 +95,8 @@ change takes effect on the next open without reloading the plugin.
 | `@sessionz-width` | `75%` | Popup width, `1%`–`100%` of the client |
 | `@sessionz-height` | `75%` | Popup height, `1%`–`100%` |
 | `@sessionz-list-width` | `25%` | List column, `1%`–`99%` of the popup; the preview takes the rest |
-| `@sessionz-border-color` | `82` | Frame colour: `0`–`255`, `#rrggbb`, `-1` (terminal default) or an ANSI name such as `bright-green` |
+| `@sessionz-border` | `on` | `off` draws the popup without its frame |
+| `@sessionz-border-color` | `82` | Frame colour, ignored when the frame is off: `0`–`255`, `#rrggbb`, `-1` (terminal default) or an ANSI name such as `bright-green` |
 | `@sessionz-blackout` | `off` | `on` hides everything behind the picker |
 
 The `%` is optional. A malformed value falls back to its default, and one tmux message names every value

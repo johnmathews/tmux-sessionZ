@@ -21,8 +21,8 @@ act="$(printf %q "$DIR/action.sh") $(printf %q "$state")"
 # User options from tmux.conf, read on every open so a change needs no reload. The separator is not
 # whitespace, so read keeps empty (unset) fields in place.
 sep=$'\x1f'
-IFS="$sep" read -r width height list_width border blackout < <(tmux display-message -p -c "$client" \
-    "#{@sessionz-width}$sep#{@sessionz-height}$sep#{@sessionz-list-width}$sep#{@sessionz-border-color}$sep#{@sessionz-blackout}")
+IFS="$sep" read -r width height list_width border border_color blackout < <(tmux display-message -p -c "$client" \
+    "#{@sessionz-width}$sep#{@sessionz-height}$sep#{@sessionz-list-width}$sep#{@sessionz-border}$sep#{@sessionz-border-color}$sep#{@sessionz-blackout}")
 
 # option VAR NAME DEFAULT REGEX: keep VAR if it matches REGEX; otherwise use DEFAULT, noting a bad value.
 ignored=""
@@ -37,7 +37,8 @@ option() {
 option width @sessionz-width 75 '^([1-9][0-9]?|100)%?$'
 option height @sessionz-height 75 '^([1-9][0-9]?|100)%?$'
 option list_width @sessionz-list-width 25 '^[1-9][0-9]?%?$'
-option border @sessionz-border-color 82 \
+option border @sessionz-border on '^(on|off)$'
+option border_color @sessionz-border-color 82 \
     '^(-1|[0-9]{1,2}|1[0-9]{2}|2[0-4][0-9]|25[0-5]|#[0-9a-fA-F]{6}|(bright-)?(black|red|green|yellow|blue|magenta|cyan|white))$'
 option blackout @sessionz-blackout off '^(on|off)$'
 # ## is a literal # in a tmux message, which would otherwise read it as a format.
@@ -58,15 +59,18 @@ if [[ "$blackout" == on ]]; then
 else
     popup=(--tmux "center,$width%,$height%")
 fi
+# The frame is fzf's own: fzf --tmux opens the popup without a tmux border. The padding stays either way.
+frame=bold
+[[ "$border" == off ]] && frame=none
 
 fzf "${popup[@]}" \
     --with-shell 'bash -c' \
     --layout reverse --sync \
     --delimiter '\t' --with-nth '2..' --nth 2 \
-    --border bold --padding 1 \
+    --border "$frame" --padding 1 \
     --prompt '> ' --pointer '▶' \
     --ansi --info hidden --highlight-line --gutter ' ' \
-    --color "border:$border,preview-border:59,separator:59,scrollbar:59,bg+:82,fg+:black:bold,hl+:black:bold:underline,pointer:black,gutter:-1" \
+    --color "border:$border_color,preview-border:59,separator:59,scrollbar:59,bg+:82,fg+:black:bold,hl+:black:bold:underline,pointer:black,gutter:-1" \
     --header "$("$DIR/action.sh" "$state" hints)" \
     --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window "right,$preview%,follow,~1" \
     --bind "start:pos(${line:-1})" \
