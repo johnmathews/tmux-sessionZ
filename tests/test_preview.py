@@ -1,5 +1,6 @@
-"""The preview beside the list shows the selected session's active pane."""
+"""The preview beside the list shows the selected session's active pane, redrawn while the picker is open."""
 
+import time
 from collections.abc import Callable
 
 from conftest import Picker, settle, wait_for
@@ -55,3 +56,33 @@ def test_preview_lists_no_other_sessions(tmux_env: Callable[..., Picker]) -> Non
     counts = {name: screen.count(name) for name in names}
     # Each name once, in the list; the preview header lists windows, not sessions.
     assert counts == {name: 1 for name in names}, screen
+
+
+def test_preview_updates_while_the_picker_is_open(picker: Picker) -> None:
+    """New output in the previewed pane shows up within the interval (1 s), with no key pressed."""
+    picker.new_session("alpha")
+    picker.open()
+    picker.select("alpha")
+    settle(picker)
+    picker.inner.run("send-keys", "-t", "=alpha:", "echo LIVE-MARK", "Enter")
+    wait_for(lambda: "LIVE-MARK" in picker.screen(), timeout=4.0, what="new output in the open preview")
+
+
+def test_preview_interval_off_keeps_it_still(picker: Picker) -> None:
+    picker.inner.run("set", "-g", "@sessionz-preview-interval", "off")
+    picker.new_session("alpha")
+    picker.open()
+    picker.select("alpha")
+    settle(picker)
+    picker.inner.run("send-keys", "-t", "=alpha:", "echo LIVE-MARK", "Enter")
+    time.sleep(2.5)
+    # The client shows another session, so the mark could only reach the screen through the preview.
+    assert "LIVE-MARK" not in picker.screen(), picker.screen()
+
+
+def test_live_preview_leaves_a_hidden_preview_hidden(picker: Picker) -> None:
+    picker.open()
+    picker.press("M-p")
+    wait_for(lambda: "╭" not in picker.screen(), what="alt-p to hide the preview")
+    time.sleep(2.5)
+    assert "╭" not in picker.screen(), picker.screen()

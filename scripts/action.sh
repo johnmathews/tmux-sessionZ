@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Behaviour of every picker key. fzf runs this through `transform`, so whatever
-# it prints is the list of fzf actions to run next.
+# Behaviour of every picker key, and of the preview timer (`tick`). fzf runs this
+# through `transform`, so whatever it prints is the list of fzf actions to run next.
 #
 # Usage: action.sh STATE_DIR VERB [KEY] [QUERY]
-#   STATE_DIR  per-picker directory made by sessionz.sh (mode, sort, client, list files)
+#   STATE_DIR  per-picker directory made by sessionz.sh (mode, sort, client, help, list files)
 #   KEY        field 1 of the focused line: a session id ($27) or d:/path
 #   QUERY      the current query, which is the name being typed in prompt modes
 #
@@ -251,5 +251,11 @@ ctrl-u)
     ;;
 ctrl-d)
     if prompting; then printf 'delete-char'; else printf 'preview-half-page-down'; fi
+    ;;
+# The preview timer (every(N), @sessionz-preview-interval). A refresh puts a scrolled preview back at
+# the bottom (follow), so only a session preview is redrawn: it is cut to the preview's height and never
+# scrolls. A directory listing or the key sheet can be scrolled and does not change on its own.
+tick)
+    if [[ "$mode" != zoxide && ! -f "$state/help" ]]; then printf 'refresh-preview'; fi
     ;;
 esac

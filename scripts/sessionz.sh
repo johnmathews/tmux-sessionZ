@@ -21,8 +21,8 @@ act="$(printf %q "$DIR/action.sh") $(printf %q "$state")"
 # User options from tmux.conf, read on every open so a change needs no reload. The separator is not
 # whitespace, so read keeps empty (unset) fields in place.
 sep=$'\x1f'
-IFS="$sep" read -r width height list_width border border_color blackout < <(tmux display-message -p -c "$client" \
-    "#{@sessionz-width}$sep#{@sessionz-height}$sep#{@sessionz-list-width}$sep#{@sessionz-border}$sep#{@sessionz-border-color}$sep#{@sessionz-blackout}")
+IFS="$sep" read -r width height list_width border border_color blackout interval < <(tmux display-message -p -c "$client" \
+    "#{@sessionz-width}$sep#{@sessionz-height}$sep#{@sessionz-list-width}$sep#{@sessionz-border}$sep#{@sessionz-border-color}$sep#{@sessionz-blackout}$sep#{@sessionz-preview-interval}")
 
 # option VAR NAME DEFAULT REGEX: keep VAR if it matches REGEX; otherwise use DEFAULT, noting a bad value.
 ignored=""
@@ -41,11 +41,17 @@ option border @sessionz-border on '^(on|off)$'
 option border_color @sessionz-border-color 82 \
     '^(-1|[0-9]{1,2}|1[0-9]{2}|2[0-4][0-9]|25[0-5]|#[0-9a-fA-F]{6}|(bright-)?(black|red|green|yellow|blue|magenta|cyan|white))$'
 option blackout @sessionz-blackout off '^(on|off)$'
+# Seconds between preview redraws, 0.1 to 99.9; off or 0 draws the preview once.
+option interval @sessionz-preview-interval 1 '^(off|0|[1-9][0-9]?(\.[0-9]+)?|0?\.[1-9][0-9]*)$'
 # ## is a literal # in a tmux message, which would otherwise read it as a format.
 [[ -n "$ignored" ]] && tmux display-message -c "$client" "sessionZ: ignored ${ignored//#/##}; using the defaults"
 width=${width%\%} height=${height%\%} list_width=${list_width%\%}
 preview=$((100 - list_width))
 printf '%s\n' "$preview" >"$state/preview"
+# Redraw the preview on a timer, so output in the previewed panes shows while the picker is open.
+# preview.sh stays a one-shot render: a looping preview would keep fzf's spinner turning.
+live=()
+[[ "$interval" != off && "$interval" != 0 ]] && live=(--bind "every($interval):transform($act tick)")
 
 # half N: half of what N% leaves of 100%, as a percentage (12.5%).
 half() {
@@ -74,6 +80,7 @@ fzf "${popup[@]}" \
     --header "$("$DIR/action.sh" "$state" hints)" \
     --preview "$(printf %q "$DIR/preview.sh") $(printf %q "$state") {1}" --preview-window "right,$preview%,follow,~1" \
     --bind "start:pos(${line:-1})" \
+    ${live[@]+"${live[@]}"} \
     --bind "enter:transform($act enter {1} {q})" \
     --bind "esc:transform($act esc)" \
     --bind "ctrl-q:transform($act kill {1})" \
