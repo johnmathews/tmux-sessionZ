@@ -8,8 +8,8 @@ sessionZ, a tmux session picker in an fzf popup, packaged as a TPM plugin.
 
 - `sessionz.tmux` — TPM entry; binds the picker key (`@sessionz-bind`, `@sessionz-prefix`)
 - `scripts/` — the picker: `sessionz.sh` (entry; reads the size, list-width, border, border-colour, blackout and
-  preview-interval options on every open), `action.sh` (every key, and the timer that keeps the list and preview live), `list.sh` (sessions with
-  their age, from `#{session_activity}`: keys typed and switches, not output), `preview.sh`
+  preview-interval options on every open), `action.sh` (every key, and the timer that keeps the list and preview live), `list.sh` (sessions, most
+  recently opened first, `#{session_last_attached}`; the age is `#{session_activity}`: keys typed and switches, not output), `preview.sh`
 - `tests/`, `pyproject.toml`, `uv.lock` — pytest suite (run with uv) that drives the real popup
 - `docs/sessionz.md` — design, keys and test harness; superseded notes in `docs/archive/`
 - `journal/` — dated development entries; point-in-time, never retro-edited
@@ -27,10 +27,11 @@ Full design: `docs/sessionz.md`. Read it before changing a binding.
   `sleep` for cursor placement.
 - **No `execute()` for prompts.** Rename and new-session are fzf prompt modes driven by `action.sh`.
   `execute()` takes over the terminal, and the redraw after it overrides chained cursor actions.
-- **Per-instance state only.** Mode, sort, client tty, previewed window, key-sheet flag and list files live in the
+- **Per-instance state only.** Mode, sort, client tty, previewed window, key-sheet flag, preview width and list files live in the
   picker's `mktemp -d` directory. Never write tmux options: two pickers on two clients must not interfere.
 - **Every key except `alt-p` goes through `action.sh`**, and so does the `every(N)` timer (`tick`),
-  which reloads the list with the same `reload-sync(cat <file>)+pos(N)`, and only while the query is empty. It prints the fzf actions to run next. Free text (a header, the prefilled rename query) goes
+  which reloads the list with the same `reload-sync(cat <file>)+pos(N)`, only in the session list with an
+  empty query and no prompt or key sheet open; otherwise it redraws the preview or nothing. It prints the fzf actions to run next. Free text (a header, the prefilled rename query) goes
   last, in the colon form (`change-header:<text>`), whose argument runs to the end of the string, so names and tmux errors need no escaping. Failed tmux calls
   that change state must be shown in the header, not swallowed.
 - **Switch the right client.** The binding passes `#{client_tty}`, and every `switch-client` uses
