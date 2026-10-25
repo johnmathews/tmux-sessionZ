@@ -252,10 +252,21 @@ ctrl-u)
 ctrl-d)
     if prompting; then printf 'delete-char'; else printf 'preview-half-page-down'; fi
     ;;
-# The preview timer (every(N), @sessionz-preview-interval). A refresh puts a scrolled preview back at
-# the bottom (follow), so only a session preview is redrawn: it is cut to the preview's height and never
-# scrolls. A directory listing or the key sheet can be scrolled and does not change on its own.
+# The timer (every(N), @sessionz-preview-interval): keeps the ages, the order and the preview live.
+# A refresh puts a scrolled preview back at the bottom (follow), so only a session preview is redrawn: it
+# is cut to the preview's height and never scrolls. A directory listing or the key sheet can be scrolled
+# and does not change on its own. The list is reloaded, cursor kept on its session, only while nothing is
+# typed: pos(N) counts matches, and a line of the file says nothing about where a session ranks among
+# them. A reload re-runs the preview, so it needs no refresh-preview of its own.
 tick)
-    if [[ "$mode" != zoxide && ! -f "$state/help" ]]; then printf 'refresh-preview'; fi
+    [[ "$mode" != zoxide && ! -f "$state/help" ]] || exit 0
+    if prompting || [[ -n "$query" ]]; then
+        printf 'refresh-preview'
+        exit 0
+    fi
+    refresh
+    printf 'reload-sync(cat %q)' "$list"
+    line=$(line_of "$key")
+    [[ -n "$line" ]] && printf '+pos(%s)' "$line"
     ;;
 esac

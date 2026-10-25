@@ -1,11 +1,11 @@
-"""The age column: time since each session last printed anything, newest first."""
+"""The age column: time since anything was last typed in each session, newest first, kept live."""
 
 import re
 import subprocess
 import time
 
 import pytest
-from conftest import REPO, Picker, settle, strip_age, wait_for
+from conftest import _EDGE, REPO, Picker, settle, strip_age, wait_for
 
 LIST = REPO / "scripts" / "list.sh"
 
@@ -24,25 +24,28 @@ def _list(picker: Picker, now: int | None = None) -> list[tuple[str, str, str]]:
     return rows
 
 
-def _last_output(picker: Picker, session: str) -> int:
-    out = picker.inner.run("list-windows", "-t", f"={session}", "-F", "#{window_activity}")
-    return max(int(v) for v in out.split())
+def _last_input(picker: Picker, session: str) -> int:
+    """The session's #{session_activity}: moved by keys typed into it, and by a client switching to it."""
+    out = picker.inner.run("list-sessions", "-F", "#{session_name}\t#{session_activity}")
+    return int(dict(line.split("\t") for line in out.splitlines())[session])
 
 
-def _quiet(picker: Picker, session: str) -> int:
-    """Wait until the session has printed nothing for over a second; return its last output time.
+def _a_second_after(when: int) -> None:
+    """Wait until the clock is past `when`, so the next activity lands on a later second."""
+    wait_for(lambda: int(time.time()) > when, timeout=3, what="a second to pass")
 
-    A new session's shell prints its prompt shortly after starting. On a slow machine that lands after the
-    test's first read, moving the activity time by a second (seen in CI as 299 s shown as 4m, not 5m).
-    """
-    previous = _last_output(picker, session)
-    stable_since = time.monotonic()
-    while time.monotonic() - stable_since < 1.2:
-        time.sleep(0.1)
-        current = _last_output(picker, session)
-        if current != previous:
-            previous, stable_since = current, time.monotonic()
-    return previous
+
+def _list_rows(picker: Picker) -> list[str]:
+    """Session names in the picker's list, top to bottom."""
+    rows = []
+    for line in picker.screen().splitlines():
+        if "┃" not in line:
+            continue
+        text = line.split("┃", 1)[1].replace("▶ ", "  ", 1)
+        name = strip_age(_EDGE.split(text, 1)[0])
+        if name and re.match(r"^\s*\d+(?:s|m|hr|d)\s", text):
+            rows.append(name)
+    return rows
 
 
 @pytest.mark.parametrize(
@@ -63,33 +66,55 @@ def _quiet(picker: Picker, session: str) -> int:
 )
 def test_age_format(picker: Picker, elapsed: int, shown: str) -> None:
     picker.new_session("alpha")
-    when = _quiet(picker, "alpha")
+    when = _last_input(picker, "alpha")
     ages = {name: age for _, age, name in _list(picker, now=when + elapsed)}
     assert ages["alpha"] == shown
 
 
-def test_age_is_the_newest_output_in_any_window(picker: Picker) -> None:
-    """Output in a second window, in a session nobody is attached to, makes the session young."""
-    picker.new_session("multi")
-    picker.inner.run("new-window", "-d", "-t", "=multi:")
-    first = _last_output(picker, "multi")
-    wait_for(lambda: int(time.time()) > first + 1, timeout=4, what="a second to pass")
-    picker.inner.run("send-keys", "-t", "=multi:1", "echo late", "Enter")
+def test_output_does_not_make_a_session_young(picker: Picker) -> None:
+    """A detached session printing on its own keeps the age of the last time anyone typed in it."""
+    picker.new_session("chatty")
+    typed = _last_input(picker, "chatty")
+    _a_second_after(typed + 1)
+    picker.inner.run("send-keys", "-t", "=chatty:", "echo output only", "Enter")
     settle(picker, quiet=0.3)
-    newest = _last_output(picker, "multi")
-    assert newest > first
-    ages = {name: age for _, age, name in _list(picker, now=newest + 10)}
-    assert ages["multi"] == "10s"
+    ages = {name: age for _, age, name in _list(picker, now=typed + 30)}
+    assert ages["chatty"] == "30s"
 
 
-def test_recent_sort_follows_the_age(picker: Picker) -> None:
+def test_recent_sort_ignores_output(picker: Picker) -> None:
     picker.new_session("older")
     picker.new_session("newer")
-    wait_for(lambda: int(time.time()) > _last_output(picker, "newer") + 1, timeout=4, what="a tick")
+    _a_second_after(_last_input(picker, "newer"))
     picker.inner.run("send-keys", "-t", "=older:", "echo wake", "Enter")
     settle(picker, quiet=0.3)
     names = [name for _, _, name in _list(picker)]
+    assert names.index("newer") < names.index("older")
+
+
+def test_typing_in_a_session_makes_it_young(picker: Picker) -> None:
+    """Guard: keys from an attached client are what move the age (they print too, so this passed before)."""
+    picker.new_session("older")
+    other = picker.attach_another("older")
+    picker.new_session("newer")
+    _a_second_after(_last_input(picker, "newer"))
+    other.type("x")
+    wait_for(lambda: _last_input(picker, "older") > _last_input(picker, "newer"), what="the keystroke to register")
+    names = [name for _, _, name in _list(picker)]
     assert names.index("older") < names.index("newer")
+
+
+def test_switching_to_a_session_makes_it_young(picker: Picker) -> None:
+    """Guard: this passed before the change too."""
+    picker.new_session("visited")
+    picker.new_session("newer")
+    _a_second_after(_last_input(picker, "newer"))
+    picker.open()
+    picker.select("visited")
+    picker.press("Enter")
+    wait_for(lambda: picker.client_session() == "visited", what="the client to switch")
+    names = [name for _, _, name in _list(picker)]
+    assert names.index("visited") < names.index("newer")
 
 
 def test_age_column_is_shown_left_of_each_name(picker: Picker) -> None:
@@ -109,3 +134,36 @@ def test_search_matches_names_not_ages(picker: Picker) -> None:
     settle(picker)
     rows = [strip_age(line) for line in picker.screen().splitlines()]
     assert not any(row.endswith("alpha") or " alpha " in row for row in rows), picker.screen()
+
+
+def _typed_elsewhere(picker: Picker) -> Picker:
+    """Sessions alpha above beta, a second client on beta, and the picker open on alpha."""
+    picker.new_session("beta")
+    other = picker.attach_another("beta")
+    picker.new_session("alpha")
+    picker.open()
+    picker.select("alpha")
+    assert _list_rows(picker).index("alpha") < _list_rows(picker).index("beta"), picker.screen()
+    _a_second_after(max(_last_input(picker, name) for name in ("alpha", "home")))
+    return other
+
+
+def test_open_list_reorders_live_and_the_cursor_stays_on_its_session(picker: Picker) -> None:
+    """Typing in beta from another client moves beta to the top within the interval; alpha stays selected."""
+    other = _typed_elsewhere(picker)
+    other.type("x")
+    wait_for(lambda: _list_rows(picker)[:1] == ["beta"], timeout=4.0, what="beta to move to the top")
+    settle(picker)
+    assert picker.selected() == "alpha", picker.screen()
+
+
+def test_open_list_holds_while_a_query_is_typed(picker: Picker) -> None:
+    """Guard: with a query the list is filtered by match, so the live reload waits and the cursor holds."""
+    other = _typed_elsewhere(picker)
+    picker.type("a")
+    wait_for(lambda: "home" not in _list_rows(picker), what="the query to filter out 'home'")
+    picker.select("beta")
+    other.type("x")
+    time.sleep(2.5)
+    assert picker.selected() == "beta", picker.screen()
+    assert "> a" in picker.screen()

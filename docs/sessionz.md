@@ -3,12 +3,12 @@
 > Purpose: how sessionZ works, why it is built this way, and how to test it. Read this before changing
 > any binding.
 
-**Status:** active. **Last updated:** 2026-10-25. **Last verified:** 2026-10-25 (`uv run pytest`, 89 passed).
+**Status:** active. **Last updated:** 2026-10-25. **Last verified:** 2026-10-25 (`uv run pytest`, 93 passed).
 
 ## 1. What it is
 
-The picker key (`prefix o` by default) opens an fzf popup listing every tmux session, the one with the
-most recent output first, with the cursor on the current session. sessionZ began in October 2026 as a rewrite of a local
+The picker key (`prefix o` by default) opens an fzf popup listing every tmux session, the most recently
+used first, with the cursor on the current session. sessionZ began in October 2026 as a rewrite of a local
 wrapper around [`omerxx/tmux-sessionx`](https://github.com/omerxx/tmux-sessionx). It shares that
 plugin's idea and none of its code. The evaluation that led to the rewrite is in
 `journal/261024-sessionx-rewrite.md`.
@@ -21,8 +21,8 @@ plugin's idea and none of its code. The evaluation that led to the rewrite is in
 | `esc` | Close the key sheet, leave a prompt/zoxide mode, or close the picker |
 | `ctrl-r` | Rename the selected session; the prompt starts from its full name. An empty name cancels |
 | `ctrl-a` | New session (stays in the picker, cursor on it). An empty name cancels |
-| `ctrl-q` | Kill the selected session. Clients on it move to the most recent other session first; the last session cannot be killed |
-| `ctrl-t` | Toggle sort: most recent output ↔ A-Z |
+| `ctrl-q` | Kill the selected session. Clients on it move to the most recently used other session first; the last session cannot be killed |
+| `ctrl-t` | Toggle sort: most recently used ↔ A-Z |
 | `ctrl-f` | Toggle the list to zoxide directories; `enter` on one switches to the session named after the directory, or creates it there |
 | `←` / `→`, `ctrl-h` / `ctrl-l` | Preview the previous / next window of the selected session (in a prompt or zoxide mode: move the text cursor) |
 | `?` | Show / hide the key sheet in the preview pane, in two columns when it is wide enough (in a prompt mode: types `?`) |
@@ -46,9 +46,9 @@ back into their scrollback to use them. Each pane ends at its last non-blank lin
 output is in view.
 
 The preview redraws every second while the picker is open (`@sessionz-preview-interval`, §1.5), so a
-session that is printing visibly changes without moving the cursor. fzf's `every(N)` event runs
-`action.sh tick`, which answers `refresh-preview` only for a session preview. A refresh puts a scrolled
-preview back at the bottom (`follow`), even when nothing changed. A session preview is cut to the
+session that is printing visibly changes without moving the cursor. The same timer keeps the list live
+(§1.3). fzf's `every(N)` event runs `action.sh tick`, which redraws only a session preview. A refresh puts
+a scrolled preview back at the bottom (`follow`), even when nothing changed. A session preview is cut to the
 preview's height, so it never scrolls, but zoxide's directory listing and the key sheet can. Those are
 not refreshed, so `ctrl-u` on them holds. A preview hidden with `alt-p` stays hidden. `preview.sh` stays
 a one-shot render: a preview command that loops (printing CSI 2 J between frames, which fzf supports)
@@ -56,13 +56,23 @@ keeps fzf's spinner turning in the preview's corner for as long as it runs. One 
 
 ### 1.3 The age column
 
-Left of each name is the time since the session last printed anything, in any of its windows: `30s`,
-`5m`, `2hr`, `30hr`, `3d`. Hours run to 48 before switching to days. The value is the newest
-`#{window_activity}` among the session's windows, which tmux updates whenever a pane writes output.
-`#{session_activity}` is not used, because it only changes when a client attaches or types; it cannot show
-that a detached session just finished something. The "recent" sort uses the same value, so the ages run
-down the list in order. A program that keeps redrawing (a clock, a spinner, `htop`) keeps its session at
-a few seconds old. Search matches names only (`--nth 2`), never ages.
+Left of each name is the time since the session was last used: `30s`, `5m`, `2hr`, `30hr`, `3d`. Hours
+run to 48 before switching to days. The value is `#{session_activity}`, which tmux moves when a client
+types into the session or switches to it. Any key sent to the session counts, not only a command at a
+shell prompt: typing to `nvim` or `claude` counts too. Keys typed into the picker itself do not; the key
+that opens it does. Output does not count: a pane printing on its own, or a detached session finishing a
+job, leaves the age alone. Watch the live preview for that (§1.2). Until 2026-10-25 the age was the newest
+output (`#{window_activity}`), so a clock or a spinner kept its session a few seconds old.
+
+The "recent" sort uses the same value, so the ages run down the list in order. Search matches names only
+(`--nth 2`), never ages.
+
+The list stays live while the picker is open: the timer that redraws the preview (§1.2) also rewrites the
+list file and reloads it, so ages tick and a session someone types into moves up. The cursor stays on
+its session: `tick` reloads with `reload-sync(cat <file>)+pos(N)`, with N that session's line in the same
+file (§2.2). While a query is typed, or a rename or new-session prompt is open, the list waits and only
+the preview redraws. `pos(N)` counts matches, and a session's line in the file says nothing about where it
+ranks among them. In zoxide mode and while the key sheet is open nothing is redrawn.
 
 ### 1.4 Look
 
@@ -107,7 +117,7 @@ change takes effect on the next open without reloading the plugin.
 | `@sessionz-border` | `on` | `off` draws the popup without its frame |
 | `@sessionz-border-color` | `82` | Frame colour, ignored when the frame is off: `0`–`255`, `#rrggbb`, `-1` (terminal default) or an ANSI name such as `bright-green` |
 | `@sessionz-blackout` | `off` | `on` hides everything behind the picker |
-| `@sessionz-preview-interval` | `1` | Seconds between preview redraws (§1.2), from `0.1` to under `100`; `off` or `0` redraws only when the cursor moves |
+| `@sessionz-preview-interval` | `1` | Seconds between redraws of the preview and the list (§1.2, §1.3), from `0.1` to under `100`; `off` or `0` turns the timer off: the preview redraws only when the cursor moves, the list only after a key that changes it |
 
 The `%` on sizes is optional. A malformed value falls back to its default, and one tmux message names
 every value that was ignored, so a typo does not stop the picker opening.
@@ -145,8 +155,8 @@ name). No `execute()` takes over the terminal, so there is no post-redraw cursor
 ### 2.4 One helper, per-instance state
 
 fzf calls `action.sh <state-dir> <verb> [field1] [query]` for every bound key except `alt-p`, which is a
-plain `toggle-preview`. The preview timer (`every(N)`) is an event, not a key, and goes through the
-helper too (`tick`). That gives one place that decides what a key means in each mode: `?` opens the key
+plain `toggle-preview`. The timer (`every(N)`) that keeps the list and preview live is an event, not a
+key, and goes through the helper too (`tick`). That gives one place that decides what a key means in each mode: `?` opens the key
 sheet in the list but types `?` in a prompt, so `?` cannot be typed into the search. `esc` closes the key
 sheet before it closes anything else. The helper performs the tmux call and prints the fzf actions to run
 next (`transform`).
@@ -161,8 +171,8 @@ Nothing is written to tmux options, so two pickers on two clients cannot interfe
 | --- | --- |
 | `sessionz.tmux` | TPM entry: binds `@sessionz-bind` (default `o`), in the prefix table unless `@sessionz-prefix` is `off` |
 | `scripts/sessionz.sh` | Picker entry; called by `run-shell` with `#{client_tty}`. Reads the options in §1.5 |
-| `scripts/action.sh` | Every key's behaviour, and the preview timer's (`tick`) |
-| `scripts/list.sh` | `id\tage\tname` lines, `recent` (newest output first) or `alpha`. `SESSIONZ_NOW` overrides the clock for tests |
+| `scripts/action.sh` | Every key's behaviour, and the timer's (`tick`) |
+| `scripts/list.sh` | `id\tage\tname` lines, `recent` (most recently used first) or `alpha`. `SESSIONZ_NOW` overrides the clock for tests |
 | `scripts/preview.sh` | Window list and pane contents (`capture-pane -e`, with history), the key sheet, or a directory listing in zoxide mode. `--window` reports which window is previewed |
 
 Tested with fzf 0.74.5 (`--tmux`, `--with-shell`, `transform`, `--gutter`), tmux 3.8 and bash 5. zoxide is
