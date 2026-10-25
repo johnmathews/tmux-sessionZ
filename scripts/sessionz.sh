@@ -41,7 +41,7 @@ option border @sessionz-border on '^(on|off)$'
 option border_color @sessionz-border-color 82 \
     '^(-1|[0-9]{1,2}|1[0-9]{2}|2[0-4][0-9]|25[0-5]|#[0-9a-fA-F]{6}|(bright-)?(black|red|green|yellow|blue|magenta|cyan|white))$'
 option blackout @sessionz-blackout off '^(on|off)$'
-# Seconds between list and preview redraws, 0.1 to 99.9; off or 0 turns the timer off.
+# Seconds between list and preview redraws, 0.1 to under 100; off or 0 turns the timer off.
 option interval @sessionz-preview-interval 1 '^(off|0|[1-9][0-9]?(\.[0-9]+)?|0?\.[1-9][0-9]*)$'
 # ## is a literal # in a tmux message, which would otherwise read it as a format.
 [[ -n "$ignored" ]] && tmux display-message -c "$client" "sessionZ: ignored ${ignored//#/##}; using the defaults"

@@ -1,4 +1,5 @@
-"""The age column: time since anything was last typed in each session, newest first, kept live."""
+"""The age column (time since a session was last typed in or switched to) and the recent sort (most recently
+opened first), both kept live while the picker is open."""
 
 import re
 import subprocess
@@ -28,6 +29,22 @@ def _last_input(picker: Picker, session: str) -> int:
     """The session's #{session_activity}: moved by keys typed into it, and by a client switching to it."""
     out = picker.inner.run("list-sessions", "-F", "#{session_name}\t#{session_activity}")
     return int(dict(line.split("\t") for line in out.splitlines())[session])
+
+
+def _last_opened(picker: Picker, session: str) -> int:
+    """When a client last switched or attached to the session (#{session_last_attached}), else its creation."""
+    out = picker.inner.run("list-sessions", "-F", "#{session_name}\t#{session_last_attached}\t#{session_created}")
+    rows = {
+        name: int(attached or created) for name, attached, created in (line.split("\t") for line in out.splitlines())
+    }
+    return rows[session]
+
+
+def _open_from(other: Picker, session: str) -> None:
+    """Switch the client in `other`'s pane to `session`, as picking it would."""
+    tty = other.outer.run("display", "-p", "-t", other.pane, "#{pane_tty}").strip()
+    other.inner.run("switch-client", "-c", tty, "-t", f"={session}")
+    wait_for(lambda: other.client_session() == session, what=f"the other client to open {session!r}")
 
 
 def _a_second_after(when: int) -> None:
@@ -92,20 +109,25 @@ def test_recent_sort_ignores_output(picker: Picker) -> None:
     assert names.index("newer") < names.index("older")
 
 
-def test_typing_in_a_session_makes_it_young(picker: Picker) -> None:
-    """Guard: keys from an attached client are what move the age (they print too, so this passed before)."""
+def test_typing_moves_the_age_but_not_the_order(picker: Picker) -> None:
+    """Keys typed in a session from another client make its age young; its place follows when it was opened."""
     picker.new_session("older")
     other = picker.attach_another("older")
+    _a_second_after(_last_opened(picker, "older"))
     picker.new_session("newer")
     _a_second_after(_last_input(picker, "newer"))
     other.type("x")
     wait_for(lambda: _last_input(picker, "older") > _last_input(picker, "newer"), what="the keystroke to register")
-    names = [name for _, _, name in _list(picker)]
-    assert names.index("older") < names.index("newer")
+    rows = _list(picker, now=_last_input(picker, "older"))
+    ages = {name: age for _, age, name in rows}
+    names = [name for _, _, name in rows]
+    assert ages["older"] == "0s"
+    assert ages["newer"] != "0s"
+    assert names.index("newer") < names.index("older")
 
 
 def test_switching_to_a_session_makes_it_young(picker: Picker) -> None:
-    """Guard: this passed before the change too."""
+    """Guard: switching moves both the age and the place, before and after the sort used last-opened."""
     picker.new_session("visited")
     picker.new_session("newer")
     _a_second_after(_last_input(picker, "newer"))
@@ -136,22 +158,23 @@ def test_search_matches_names_not_ages(picker: Picker) -> None:
     assert not any(row.endswith("alpha") or " alpha " in row for row in rows), picker.screen()
 
 
-def _typed_elsewhere(picker: Picker) -> Picker:
-    """Sessions alpha above beta, a second client on beta, and the picker open on alpha."""
+def _opened_elsewhere(picker: Picker) -> Picker:
+    """Sessions alpha above beta, a second client on 'spare', and the picker open on alpha."""
     picker.new_session("beta")
-    other = picker.attach_another("beta")
     picker.new_session("alpha")
+    picker.new_session("spare")
+    other = picker.attach_another("spare")
     picker.open()
     picker.select("alpha")
     assert _list_rows(picker).index("alpha") < _list_rows(picker).index("beta"), picker.screen()
-    _a_second_after(max(_last_input(picker, name) for name in ("alpha", "home")))
+    _a_second_after(max(_last_opened(picker, name) for name in ("alpha", "beta", "home", "spare")))
     return other
 
 
 def test_open_list_reorders_live_and_the_cursor_stays_on_its_session(picker: Picker) -> None:
-    """Typing in beta from another client moves beta to the top within the interval; alpha stays selected."""
-    other = _typed_elsewhere(picker)
-    other.type("x")
+    """Another client opening beta moves beta to the top within the interval; alpha stays selected."""
+    other = _opened_elsewhere(picker)
+    _open_from(other, "beta")
     wait_for(lambda: _list_rows(picker)[:1] == ["beta"], timeout=4.0, what="beta to move to the top")
     settle(picker)
     assert picker.selected() == "alpha", picker.screen()
@@ -159,11 +182,11 @@ def test_open_list_reorders_live_and_the_cursor_stays_on_its_session(picker: Pic
 
 def test_open_list_holds_while_a_query_is_typed(picker: Picker) -> None:
     """Guard: with a query the list is filtered by match, so the live reload waits and the cursor holds."""
-    other = _typed_elsewhere(picker)
+    other = _opened_elsewhere(picker)
     picker.type("a")
     wait_for(lambda: "home" not in _list_rows(picker), what="the query to filter out 'home'")
     picker.select("beta")
-    other.type("x")
+    _open_from(other, "beta")
     time.sleep(2.5)
     assert picker.selected() == "beta", picker.screen()
     assert "> a" in picker.screen()

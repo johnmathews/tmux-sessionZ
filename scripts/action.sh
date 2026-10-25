@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Behaviour of every picker key, and of the preview timer (`tick`). fzf runs this
-# through `transform`, so whatever it prints is the list of fzf actions to run next.
+# Behaviour of every picker key, and of the timer (`tick`) that keeps the list and
+# preview live. fzf runs this through `transform`, so whatever it prints is the
+# list of fzf actions to run next.
 #
 # Usage: action.sh STATE_DIR VERB [KEY] [QUERY]
-#   STATE_DIR  per-picker directory made by sessionz.sh (mode, sort, client, help, list files)
+#   STATE_DIR  per-picker directory made by sessionz.sh (mode, sort, client, window, help, preview,
+#              list files)
 #   KEY        field 1 of the focused line: a session id ($27) or d:/path
 #   QUERY      the current query, which is the name being typed in prompt modes
 #
