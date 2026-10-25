@@ -1,4 +1,4 @@
-"""User options read from tmux.conf each time the picker opens: size, list width, border colour, blackout."""
+"""User options read from tmux.conf each time the picker opens: size, list width, border, blackout."""
 
 import re
 import shutil
@@ -54,6 +54,28 @@ def test_border_colour(picker: Picker) -> None:
     assert re.search(r"\x1b\[(?:[0-9;]*;)?38;2;255;0;0[;m]", top[: top.index("┏")]), top
 
 
+def _content_origin(picker: Picker) -> tuple[int, int]:
+    """Row and column of the prompt, the top-left of fzf's content. The preview's top edge shares its row."""
+    lines = picker.screen().splitlines()
+    row = next(i for i, line in enumerate(lines) if "╭" in line)
+    return row, lines[row].index("> ")
+
+
+def test_border_off_removes_only_the_frame(picker: Picker) -> None:
+    """No popup frame; the preview's own border and the padding inside the frame stay."""
+    picker.open()
+    framed = _content_origin(picker)
+    picker.close()
+    _set(picker, border="off")
+    picker.open()
+    screen = picker.screen()
+    assert not re.search(r"[┏┓┗┛┃━]", screen), screen
+    assert "╭" in screen, screen
+    # The frame goes, and with it the space fzf keeps beside a side border; the padding stays. So the
+    # content moves one row up and two columns left. Dropping the padding too would make it 2 and 3.
+    assert _content_origin(picker) == (framed[0] - 1, framed[1] - 2), screen
+
+
 def test_blackout_hides_what_is_behind_the_popup(picker: Picker) -> None:
     picker.inner.run("send-keys", "-t", "=home:", "clear; echo BACKGROUND-MARK", "Enter")
     wait_for(lambda: "BACKGROUND-MARK" in picker.screen(), what="mark behind the popup")
@@ -71,16 +93,23 @@ def test_blackout_hides_what_is_behind_the_popup(picker: Picker) -> None:
 
 
 def test_bad_values_fall_back_to_defaults_and_say_so(picker: Picker) -> None:
-    _set(picker, width="huge", list_width="0%", border_color="chartreuse", blackout="maybe")
+    _set(picker, width="huge", list_width="0%", border="none", border_color="chartreuse", blackout="maybe")
     picker.open()
-    width, _ = _frame(picker)
+    width, _ = _frame(picker)  # the frame is drawn: a bad @sessionz-border means on
     assert abs(width - 0.75 * COLS) <= 2, width
     share = picker.list_share()
     assert share is not None and 0.2 <= share <= 0.3, share
     log = picker.inner.run("show-messages")
     warning = next((line for line in log.splitlines() if "sessionZ: ignored" in line), "")
-    for name in ("@sessionz-width", "@sessionz-list-width", "@sessionz-border-color", "@sessionz-blackout"):
-        assert name in warning, (name, log)
+    names = (
+        "@sessionz-width",
+        "@sessionz-list-width",
+        "@sessionz-border",
+        "@sessionz-border-color",
+        "@sessionz-blackout",
+    )
+    for name in names:
+        assert f"{name} '" in warning, (name, log)
 
 
 @pytest.mark.skipif(shutil.which("zoxide") is None, reason="zoxide not installed")
