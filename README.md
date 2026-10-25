@@ -37,9 +37,10 @@ set -g @sessionz-list-width '25%'        # session list's share of the popup; th
 set -g @sessionz-border 'on'             # 'off' draws the popup without its frame
 set -g @sessionz-border-color '82'       # frame colour: 0-255, '#rrggbb' or a name like 'bright-green'
 set -g @sessionz-blackout 'off'          # 'on' hides everything behind the picker
+set -g @sessionz-preview-interval '1'    # seconds between preview redraws; 'off' or '0': only on cursor moves
 ```
 
-The last six are read each time the picker opens, so a change needs no reload. A bad value falls back to
+The last seven are read each time the picker opens, so a change needs no reload. A bad value falls back to
 its default and is named in a tmux message.
 
 ## Keys

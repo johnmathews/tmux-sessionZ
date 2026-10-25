@@ -3,7 +3,7 @@
 > Purpose: how sessionZ works, why it is built this way, and how to test it. Read this before changing
 > any binding.
 
-**Status:** active. **Last updated:** 2026-10-25. **Last verified:** 2026-10-25 (`uv run pytest`, 85 passed).
+**Status:** active. **Last updated:** 2026-10-25. **Last verified:** 2026-10-25 (`uv run pytest`, 89 passed).
 
 ## 1. What it is
 
@@ -44,6 +44,15 @@ side-by-side split is shown one pane above the other. The preview's height is sh
 a pane short enough to fit is shown in full, and the remaining lines go to the longer panes, which reach
 back into their scrollback to use them. Each pane ends at its last non-blank line, so the prompt or latest
 output is in view.
+
+The preview redraws every second while the picker is open (`@sessionz-preview-interval`, §1.5), so a
+session that is printing visibly changes without moving the cursor. fzf's `every(N)` event runs
+`action.sh tick`, which answers `refresh-preview` only for a session preview. A refresh puts a scrolled
+preview back at the bottom (`follow`), even when nothing changed. A session preview is cut to the
+preview's height, so it never scrolls, but zoxide's directory listing and the key sheet can. Those are
+not refreshed, so `ctrl-u` on them holds. A preview hidden with `alt-p` stays hidden. `preview.sh` stays
+a one-shot render: a preview command that loops (printing CSI 2 J between frames, which fzf supports)
+keeps fzf's spinner turning in the preview's corner for as long as it runs. One redraw costs about 30 ms for a one-pane window and 80 ms for four panes.
 
 ### 1.3 The age column
 
@@ -98,9 +107,10 @@ change takes effect on the next open without reloading the plugin.
 | `@sessionz-border` | `on` | `off` draws the popup without its frame |
 | `@sessionz-border-color` | `82` | Frame colour, ignored when the frame is off: `0`–`255`, `#rrggbb`, `-1` (terminal default) or an ANSI name such as `bright-green` |
 | `@sessionz-blackout` | `off` | `on` hides everything behind the picker |
+| `@sessionz-preview-interval` | `1` | Seconds between preview redraws (§1.2), from `0.1` to under `100`; `off` or `0` redraws only when the cursor moves |
 
-The `%` is optional. A malformed value falls back to its default, and one tmux message names every value
-that was ignored, so a typo does not stop the picker opening.
+The `%` on sizes is optional. A malformed value falls back to its default, and one tmux message names
+every value that was ignored, so a typo does not stop the picker opening.
 
 Blackout makes the popup cover the whole client and draws the panel inside an fzf `--margin` of half the
 remaining width and height, so the panel keeps its configured size. The space around it is the
@@ -135,13 +145,14 @@ name). No `execute()` takes over the terminal, so there is no post-redraw cursor
 ### 2.4 One helper, per-instance state
 
 fzf calls `action.sh <state-dir> <verb> [field1] [query]` for every bound key except `alt-p`, which is a
-plain `toggle-preview`. That gives one place that decides what a key means in each mode: `?` opens the key
+plain `toggle-preview`. The preview timer (`every(N)`) is an event, not a key, and goes through the
+helper too (`tick`). That gives one place that decides what a key means in each mode: `?` opens the key
 sheet in the list but types `?` in a prompt, so `?` cannot be typed into the search. `esc` closes the key
 sheet before it closes anything else. The helper performs the tmux call and prints the fzf actions to run
 next (`transform`).
 
-The current mode (`sessions`, `zoxide`, `rename:<id>`, `new`), sort order, client tty, previewed window
-and list files live in a `mktemp -d` directory. One picker instance owns it, and it is removed on exit.
+The current mode (`sessions`, `zoxide`, `rename:<id>`, `new`), sort order, client tty, previewed window,
+whether the key sheet is open (`help`) and list files live in a `mktemp -d` directory. One picker instance owns it, and it is removed on exit.
 Nothing is written to tmux options, so two pickers on two clients cannot interfere.
 
 ### 2.5 Files
@@ -150,7 +161,7 @@ Nothing is written to tmux options, so two pickers on two clients cannot interfe
 | --- | --- |
 | `sessionz.tmux` | TPM entry: binds `@sessionz-bind` (default `o`), in the prefix table unless `@sessionz-prefix` is `off` |
 | `scripts/sessionz.sh` | Picker entry; called by `run-shell` with `#{client_tty}`. Reads the options in §1.5 |
-| `scripts/action.sh` | Every key's behaviour |
+| `scripts/action.sh` | Every key's behaviour, and the preview timer's (`tick`) |
 | `scripts/list.sh` | `id\tage\tname` lines, `recent` (newest output first) or `alpha`. `SESSIONZ_NOW` overrides the clock for tests |
 | `scripts/preview.sh` | Window list and pane contents (`capture-pane -e`, with history), the key sheet, or a directory listing in zoxide mode. `--window` reports which window is previewed |
 

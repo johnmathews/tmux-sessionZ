@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 sessionZ, a tmux session picker in an fzf popup, packaged as a TPM plugin.
 
 - `sessionz.tmux` — TPM entry; binds the picker key (`@sessionz-bind`, `@sessionz-prefix`)
-- `scripts/` — the picker: `sessionz.sh` (entry; reads the size, list-width, border, border-colour and blackout
-  options on every open), `action.sh` (every key), `list.sh` (sessions with their age, from
+- `scripts/` — the picker: `sessionz.sh` (entry; reads the size, list-width, border, border-colour, blackout and
+  preview-interval options on every open), `action.sh` (every key, and the preview timer), `list.sh` (sessions with their age, from
   `#{window_activity}`), `preview.sh`
 - `tests/`, `pyproject.toml`, `uv.lock` — pytest suite (run with uv) that drives the real popup
 - `docs/sessionz.md` — design, keys and test harness; superseded notes in `docs/archive/`
@@ -27,11 +27,11 @@ Full design: `docs/sessionz.md`. Read it before changing a binding.
   `sleep` for cursor placement.
 - **No `execute()` for prompts.** Rename and new-session are fzf prompt modes driven by `action.sh`.
   `execute()` takes over the terminal, and the redraw after it overrides chained cursor actions.
-- **Per-instance state only.** Mode, sort, client tty, previewed window and list files live in the
+- **Per-instance state only.** Mode, sort, client tty, previewed window, key-sheet flag and list files live in the
   picker's `mktemp -d` directory. Never write tmux options: two pickers on two clients must not interfere.
-- **Every key except `alt-p` goes through `action.sh`**, which prints the fzf actions to run next. Free
-  text (a header, the prefilled rename query) goes last, in the colon form (`change-header:<text>`), whose
-  argument runs to the end of the string, so names and tmux errors need no escaping. Failed tmux calls
+- **Every key except `alt-p` goes through `action.sh`**, and so does the `every(N)` preview timer
+  (`tick`). It prints the fzf actions to run next. Free text (a header, the prefilled rename query) goes
+  last, in the colon form (`change-header:<text>`), whose argument runs to the end of the string, so names and tmux errors need no escaping. Failed tmux calls
   that change state must be shown in the header, not swallowed.
 - **Switch the right client.** The binding passes `#{client_tty}`, and every `switch-client` uses
   `-c "$client"`.
@@ -60,6 +60,10 @@ Verified on fzf 0.74.5 / tmux 3.8. Older measurements: `docs/archive/fzf-cursor-
 - After `execute(...)`, fzf's redraw overrides chained `pos()`/`last`. This is why prompts live inside fzf.
 - `capture-pane` trims trailing spaces, so match `New session:`, not `New session: `.
 - Root-table tmux bindings (e.g. `bind -n C-l`) do not fire while the popup is open; keys reach fzf.
+- `every(N)` fires on a timer; it drives the live preview. A preview command that loops instead keeps
+  fzf's spinner turning in the preview corner (`noinfo` does not hide it), so the screen never settles.
+- `refresh-preview` puts a scrolled preview back at the bottom under `follow`, even when the output is
+  identical. This is why `tick` refreshes only session previews, which never scroll.
 - `change-preview-window(...)` inherits unset options from `--preview-window`, and shows a hidden preview
   unless the spec says `hidden`. A `transform` child sees no preview size (`FZF_PREVIEW_COLUMNS`) while
   the preview is hidden, which is how `action.sh` keeps it hidden.

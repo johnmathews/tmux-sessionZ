@@ -93,7 +93,15 @@ def test_blackout_hides_what_is_behind_the_popup(picker: Picker) -> None:
 
 
 def test_bad_values_fall_back_to_defaults_and_say_so(picker: Picker) -> None:
-    _set(picker, width="huge", list_width="0%", border="none", border_color="chartreuse", blackout="maybe")
+    _set(
+        picker,
+        width="huge",
+        list_width="0%",
+        border="none",
+        border_color="chartreuse",
+        blackout="maybe",
+        preview_interval="fast",
+    )
     picker.open()
     width, _ = _frame(picker)  # the frame is drawn: a bad @sessionz-border means on
     assert abs(width - 0.75 * COLS) <= 2, width
@@ -107,6 +115,7 @@ def test_bad_values_fall_back_to_defaults_and_say_so(picker: Picker) -> None:
         "@sessionz-border",
         "@sessionz-border-color",
         "@sessionz-blackout",
+        "@sessionz-preview-interval",
     )
     for name in names:
         assert f"{name} '" in warning, (name, log)

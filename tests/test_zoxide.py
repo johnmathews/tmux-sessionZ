@@ -3,11 +3,12 @@
 import shutil
 import subprocess
 import tempfile
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from conftest import Picker, wait_for
+from conftest import Picker, settle, wait_for
 
 pytestmark = pytest.mark.skipif(shutil.which("zoxide") is None, reason="zoxide not installed")
 
@@ -61,3 +62,26 @@ def test_zoxide_mode_keeps_a_hidden_preview_hidden(picker: Picker, short_dir: Pa
     picker.press("Escape")
     wait_for(lambda: "zoxide>" not in picker.screen(), what="session mode")
     assert picker.list_share() is None
+
+
+def test_live_preview_keeps_a_scrolled_listing_where_it_is(picker: Picker, short_dir: Path) -> None:
+    """The timer does not refresh a directory listing, so ctrl-u holds.
+
+    A refresh would put the view back at the bottom (follow), even for an identical listing. A session
+    preview is cut to the preview's height and never scrolls, so only session previews are refreshed.
+    """
+    for i in range(200):
+        (short_dir / f"file-{i:03d}").touch()
+    subprocess.run(["zoxide", "add", str(short_dir)], env=picker.inner.env, check=True)
+    picker.open()
+    picker.press("C-f")
+    wait_for(lambda: str(short_dir) in picker.screen(), what="zoxide directories to list")
+    picker.select(str(short_dir))
+    wait_for(lambda: "file-199" in picker.screen(), what="the end of the listing in the preview")
+    settle(picker)
+    bottom = picker.screen()
+    picker.press("C-u")
+    wait_for(lambda: picker.screen() != bottom, what="the preview to scroll up")
+    scrolled = picker.screen()
+    time.sleep(2.5)
+    assert picker.screen() == scrolled
