@@ -3,7 +3,7 @@
 > Purpose: how sessionZ works, why it is built this way, and how to test it. Read this before changing
 > any binding.
 
-**Status:** active. **Last updated:** 2026-10-25. **Last verified:** 2026-10-25 (`uv run pytest`, 93 passed).
+**Status:** active. **Last updated:** 2026-10-27. **Last verified:** 2026-10-27 (`uv run pytest`, 95 passed).
 
 ## 1. What it is
 
@@ -174,7 +174,7 @@ Nothing is written to tmux options, so two pickers on two clients cannot interfe
 
 | File | Role |
 | --- | --- |
-| `sessionz.tmux` | TPM entry: binds `@sessionz-bind` (default `o`), in the prefix table unless `@sessionz-prefix` is `off` |
+| `sessionz.tmux` | TPM entry: binds each key in `@sessionz-bind` (space-separated, default `o`), in the prefix table unless `@sessionz-prefix` is `off` |
 | `scripts/sessionz.sh` | Picker entry; called by `run-shell` with `#{client_tty}`. Reads the options in §1.5 |
 | `scripts/action.sh` | What every key but `alt-p` does, the timer's `tick`, and the header (`hints`) |
 | `scripts/list.sh` | `id\tage\tname` lines, `recent` (most recently opened first) or `alpha`. `SESSIONZ_NOW` overrides the clock for tests |
@@ -197,7 +197,8 @@ with `capture-pane`; `screen_ansi()` keeps the colours. Helpers live in `tests/c
 
 - `tests/test_preview_layout.py` runs `preview.sh` directly, with a fixed `FZF_PREVIEW_LINES`/`COLUMNS`, to
   check the line budget and escape codes exactly.
-- `tests/test_tpm.py` loads `sessionz.tmux` and opens the picker through the key it binds.
+- `tests/test_tpm.py` loads `sessionz.tmux` and opens the picker through the key it binds, including
+  the second of two keys.
 - `tests/test_shellcheck.py` lints every script and the TPM entry.
 - `SESSIONZ_ENTRY=<path>` points the suite at another entry script.
 
