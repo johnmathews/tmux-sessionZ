@@ -25,6 +25,14 @@ def test_bind_option_changes_the_key(picker: Picker) -> None:
     assert "scripts/sessionz.sh" in _binding(picker, "prefix", "C-s")
 
 
+def test_bind_option_takes_several_keys(picker: Picker) -> None:
+    """A space-separated @sessionz-bind binds every key in it, each to the picker."""
+    picker.inner.run("set", "-g", "@sessionz-bind", "o s")
+    _load(picker)
+    for key in ("o", "s"):
+        assert "scripts/sessionz.sh" in _binding(picker, "prefix", key), key
+
+
 def test_prefix_off_binds_in_the_root_table(picker: Picker) -> None:
     picker.inner.run("set", "-g", "@sessionz-bind", "F11")
     picker.inner.run("set", "-g", "@sessionz-prefix", "off")
@@ -35,6 +43,14 @@ def test_prefix_off_binds_in_the_root_table(picker: Picker) -> None:
 def test_key_bound_by_the_plugin_opens_the_picker(picker: Picker) -> None:
     """End to end through the TPM entry file rather than the harness's own F12 binding."""
     picker.inner.run("set", "-g", "@sessionz-bind", "F11")
+    picker.inner.run("set", "-g", "@sessionz-prefix", "off")
+    _load(picker)
+    picker.press("F11")
+    wait_for(lambda: picker.is_open() and picker.selected() == "home", what="picker opened by F11")
+
+
+def test_second_key_bound_by_the_plugin_opens_the_picker(picker: Picker) -> None:
+    picker.inner.run("set", "-g", "@sessionz-bind", "F10 F11")
     picker.inner.run("set", "-g", "@sessionz-prefix", "off")
     _load(picker)
     picker.press("F11")

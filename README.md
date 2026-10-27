@@ -30,8 +30,8 @@ then press `prefix I` to install. The picker opens with `prefix o`.
 ### Options
 
 ```tmux
-set -g @sessionz-bind 'o'                # key that opens the picker (default: o)
-set -g @sessionz-prefix 'on'             # 'off' binds the key without the prefix
+set -g @sessionz-bind 'o'                # key that opens the picker (default: o); 'o s' binds both
+set -g @sessionz-prefix 'on'             # 'off' binds the keys without the prefix
 set -g @sessionz-width '75%'             # popup width (default: 75%)
 set -g @sessionz-height '75%'            # popup height (default: 75%)
 set -g @sessionz-list-width '25%'        # session list's share of the popup; the preview gets the rest
