@@ -195,6 +195,11 @@ server, so the popup renders as it would in a terminal. The test sends keys to t
 with `capture-pane`; `screen_ansi()` keeps the colours. Helpers live in `tests/conftest.py`: `open`,
 `select`, `press`, `names`, `client_session`, `client_window`, and `attach_another` for a second client.
 
+Every server a test starts is killed afterwards, including when `start()` itself fails (an attach that
+times out, Ctrl-C); `tests/test_harness.py` checks that. A leftover server matters beyond this repo: it
+turns off tmux-continuum's autosave on the same machine, because continuum only saves while it sees one
+tmux server. If you find one (`pgrep -lf sxt-`), stop it with `tmux -L <socket> kill-server`.
+
 - `tests/test_preview_layout.py` runs `preview.sh` directly, with a fixed `FZF_PREVIEW_LINES`/`COLUMNS`, to
   check the line budget and escape codes exactly.
 - `tests/test_tpm.py` loads `sessionz.tmux` and opens the picker through the key it binds, including
