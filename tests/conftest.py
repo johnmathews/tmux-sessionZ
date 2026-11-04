@@ -247,13 +247,21 @@ def start(tmp: Path, first_session: str = "home", width: int = 200, height: int 
             ]
         )
     )
-    inner.run("-f", str(conf), "new-session", "-d", "-s", first_session)
-    attach = _attach_cmd(inner, first_session)
-    outer.run("-f", "/dev/null", "new-session", "-d", "-s", "outer", "-x", str(width), "-y", str(height), attach)
-    outer.run("set", "-g", "status", "off")
-    outer.run("set", "-g", "escape-time", "0")
-    picker = Picker(inner, outer)
-    wait_for(lambda: picker.client_session() == first_session, what="client to attach")
+    # Until start() returns, no fixture knows these servers exist, so a failure here (an attach that times
+    # out, Ctrl-C) must kill them itself. Leaked servers kept running for days and broke tmux-continuum's
+    # autosave on the same machine, which only saves while it sees a single tmux server.
+    try:
+        inner.run("-f", str(conf), "new-session", "-d", "-s", first_session)
+        attach = _attach_cmd(inner, first_session)
+        outer.run("-f", "/dev/null", "new-session", "-d", "-s", "outer", "-x", str(width), "-y", str(height), attach)
+        outer.run("set", "-g", "status", "off")
+        outer.run("set", "-g", "escape-time", "0")
+        picker = Picker(inner, outer)
+        wait_for(lambda: picker.client_session() == first_session, what="client to attach")
+    except BaseException:
+        outer.kill()
+        inner.kill()
+        raise
     return picker
 
 
@@ -269,8 +277,10 @@ def tmux_env(tmp_path: Path) -> Iterator[Callable[..., Picker]]:
 
     yield factory
     for picker in started:
-        picker.outer.kill()
-        picker.inner.kill()
+        try:
+            picker.outer.kill()
+        finally:
+            picker.inner.kill()
 
 
 @pytest.fixture
