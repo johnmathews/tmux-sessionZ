@@ -3,7 +3,7 @@
 > Purpose: how sessionZ works, why it is built this way, and how to test it. Read this before changing
 > any binding.
 
-**Status:** active. **Last updated:** 2026-10-27. **Last verified:** 2026-10-27 (`uv run pytest`, 95 passed).
+**Status:** active. **Last updated:** 2026-11-04. **Last verified:** 2026-11-05 (`uv run pytest` on `main` after PR #12, 96 passed).
 
 ## 1. What it is
 
